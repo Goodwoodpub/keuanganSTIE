@@ -34,7 +34,11 @@ function pgStore(url) {
         id TEXT PRIMARY KEY, name TEXT, mime TEXT NOT NULL, size INTEGER NOT NULL,
         data BYTEA NOT NULL, created_by TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
       await q(`INSERT INTO app_state(id,version,data) VALUES(1,1,$1) ON CONFLICT (id) DO NOTHING`, [JSON.stringify(emptyState())]);
+      await q(`CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, val JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
     },
+    /* Penyimpanan kecil terpisah (mis. notifikasi LMS), tidak mengubah versi data utama. */
+    async getKV(k) { const r = (await q('SELECT val FROM kv WHERE key=$1', [k])).rows[0]; return r ? r.val : null; },
+    async setKV(k, v) { await q('INSERT INTO kv(key,val,updated_at) VALUES($1,$2,now()) ON CONFLICT (key) DO UPDATE SET val=EXCLUDED.val, updated_at=now()', [k, JSON.stringify(v)]); },
     async countUsers() { return +(await q('SELECT count(*)::int n FROM users')).rows[0].n; },
     async listUsers() {
       return (await q('SELECT username u,name,role FROM users ORDER BY created_at,username')).rows;
@@ -98,8 +102,11 @@ function fileStore(dir) {
       fs.mkdirSync(fdir, { recursive: true });
       db = fs.existsSync(dbf) ? JSON.parse(fs.readFileSync(dbf, 'utf8')) : { users: [], version: 1, data: emptyState(), files: {} };
       db.files = db.files || {};
+      db.kv = db.kv || {};
       flush();
     },
+    async getKV(k) { return db.kv[k] ?? null; },
+    async setKV(k, v) { db.kv[k] = v; flush(); },
     async countUsers() { return db.users.length; },
     async listUsers() { return db.users.map(({ u, name, role }) => ({ u, name, role })); },
     async getUser(u) { return db.users.find(x => x.u === u) || null; },

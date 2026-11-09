@@ -171,12 +171,12 @@ function mhsdv() {
   ${sAll.tunggu ? `<div class="aps warn" style="margin:12px 0">Ada pembayaran yang menunggu verifikasi di LMS.</div>` : ''}</div>
   ${lPerBulanMhs(m)}
   <div class=box><div class=rzh><div><h3>Tagihan</h3><small>Status setiap tagihan sesuai data terakhir di LMS.</small></div></div>
-  ${T.length ? T.map(t => `<div class=txc style="margin-top:12px"><div class=txb style="width:100%"><div class=txt><div><b>${esc(t.jenis)}</b>${t.keterangan ? `<div class=mu>${esc(t.keterangan)}</div>` : ''}<div class=meta><span>${NI.rc}${esc(t.nomor_invoice)}</span>${lBlnT(t) ? `<span>${NI.cal}Bulan ${esc(mLabel(lBlnT(t)))}</span>` : ''}${t.periode_label ? `<span>${NI.cal}${esc(t.periode_label)}</span>` : ''}<span>${NI.tag}${esc(t.skema)}</span><span>${NI.cal}Jatuh tempo ${fmtD(t.jatuh_tempo_berikutnya || t.deadline)}</span>${t.kwitansi ? `<span>${NI.pdf}Kwitansi ${esc(t.kwitansi)}</span>` : ''}</div></div><div style="text-align:right"><div class=amt>${Rp(t.nominal)}</div>${tBadge(t)}</div></div>
+  ${T.length ? T.map(t => `<div class=txc style="margin-top:12px"><div class=txb style="width:100%"><div class=txt><div><b>${esc(t.jenis)}</b>${t.keterangan ? `<div class=mu>${esc(t.keterangan)}</div>` : ''}<div class=meta><span>${NI.rc}${esc(t.nomor_invoice)}</span>${lBlnT(t) ? `<span>${NI.cal}Bulan ${esc(mLabel(lBlnT(t)))}</span>` : ''}${t.periode_label ? `<span>${NI.cal}${esc(t.periode_label)}</span>` : ''}<span>${NI.tag}${esc(t.skema)}</span><span>${NI.cal}Jatuh tempo ${fmtD(t.jatuh_tempo_berikutnya || t.deadline)}</span>${t.kwitansi ? `<span>${NI.pdf}Kwitansi ${esc(t.kwitansi)}</span>` : ''}${t.ada_bukti ? `<span><a href="/api/lms/bukti/tagihan/${t.id}" target=_blank rel=noopener>${NI.eye}Bukti dari mahasiswa</a></span>` : ''}</div></div><div style="text-align:right"><div class=amt>${Rp(t.nominal)}</div>${tBadge(t)}</div></div>
     <div class=prog style="margin-top:12px"><i style="width:${t.persen}%"></i></div><small class=pl>Dibayar ${Rp(t.dibayar)} (${t.persen}%) · sisa ${Rp(t.sisa)}${t.potongan ? ` · potongan ${Rp(t.potongan)}` : ''}</small>
     ${t.angsuran && t.angsuran.length ? `<div class=tw style="margin-top:10px"><table class=lmt><tr><th>Angsuran</th><th>Untuk bulan</th><th>Jatuh tempo</th><th>Nominal</th><th>Status</th></tr>${t.angsuran.map(a => `<tr><td>Ke-${a.ke}</td><td>${esc(mLabel(lBlnA(a)))}</td><td>${fmtD(a.jatuh_tempo)}</td><td>${Rp(a.nominal)}</td><td><span class="bd ${(aSt[a.status] || ['', ''])[1]}">${(aSt[a.status] || [a.status])[0]}</span></td></tr>`).join('')}</table></div>` : ''}</div></div>`).join('') : `<div class=empty style="margin-top:12px">${IC.list}<b>Belum ada tagihan untuk mahasiswa ini</b></div>`}</div>
   <div class=box><div class=bh><h4>Riwayat pembayaran</h4>${LM.form ? '' : `<button class=btn onclick="LM.form=true;draw();setTimeout(()=>{const f=$('lmf');if(f)f.scrollIntoView({behavior:'smooth',block:'center'})},50)">+ Catat Pembayaran Manual</button>`}</div>
   ${LM.form ? lFormBayar(m, T) : ''}
-  <div class=tw><table class=lmt><tr><th>Tanggal</th><th>Tagihan</th><th class=hm>Metode</th><th class=n>Nominal</th><th>Status</th><th></th></tr>${P.map(({ p, t }) => `<tr><td style="white-space:nowrap">${lTgl(p.tanggal)}</td><td>${esc(t.jenis)}<small>${lBlnT(t) ? 'Bulan ' + esc(mLabel(lBlnT(t))) : esc(t.periode_label || '')}${(p.ke || 1) > 1 ? ' · ke-' + p.ke : ''}</small>${p.catatan ? `<small>${esc(p.catatan)}</small>` : ''}</td><td class=hm>${esc(p.metode || '-')}</td><td class=n>${Rp(p.nominal)}</td><td>${pBadge(p.status)}</td><td style="text-align:right">${p.dari_keuangan && p.status == 'valid' ? `<button class="btn o" style="padding:6px 10px;font-size:12.5px" onclick="lBatal('${esc(p.id)}',${p.nominal})">Batalkan</button>` : ''}</td></tr>`).join('') || '<tr><td colspan=6>Belum ada pembayaran.</td></tr>'}</table></div></div>`;
+  <div class=tw><table class=lmt><tr><th>Tanggal</th><th>Tagihan</th><th class=hm>Metode</th><th class=n>Nominal</th><th>Status</th><th></th></tr>${P.map(({ p, t }) => `<tr><td style="white-space:nowrap">${lTgl(p.tanggal)}</td><td>${esc(t.jenis)}<small>${lBlnT(t) ? 'Bulan ' + esc(mLabel(lBlnT(t))) : esc(t.periode_label || '')}${(p.ke || 1) > 1 ? ' · ke-' + p.ke : ''}</small>${p.catatan ? `<small>${esc(p.catatan)}</small>` : ''}</td><td class=hm>${esc(p.metode || '-')}</td><td class=n>${Rp(p.nominal)}</td><td>${pBadge(p.status)}</td><td style="text-align:right;white-space:nowrap">${lAksiBukti(p, t)}${p.dari_keuangan && p.status == 'valid' ? ` <button class="btn o" style="padding:6px 10px;font-size:12.5px" onclick="lBatal('${esc(p.id)}',${p.nominal})">Batalkan</button>` : ''}</td></tr>`).join('') || '<tr><td colspan=6>Belum ada pembayaran.</td></tr>'}</table></div></div>`;
 }
 
 /* ---------- Ekspor CSV ---------- */
@@ -316,6 +316,8 @@ function lFormBayar(m, T) {
   <label>Pembayaran untuk</label><select id=fbT onchange="lFbSync()"><option value="">Tagihan baru (belum ada tagihannya di LMS)</option>${open.map(t => `<option value="${t.id}" data-sisa="${t.sisa}">${esc(t.jenis)}${lBlnT(t) ? ' · bulan ' + esc(mLabel(lBlnT(t))) : ''} · sisa ${Rp(t.sisa)}</option>`).join('')}</select>
   <div id=fbBaru class=g2 style="margin-top:4px"><div><label class=req>Jenis tagihan</label><select id=fbJ>${jenis.map(j => `<option>${esc(j)}</option>`).join('')}</select></div><div><label>Keterangan (opsional)</label><input id=fbK maxlength=255 placeholder="Contoh: SPP Maret 2026"></div><div><label>Untuk bulan (opsional)</label><input id=fbB type=month></div></div>
   <div class=g2 style="margin-top:4px"><div><label class=req>Nominal dibayar</label><div class=pre><span>Rp</span><input id=fbN class=rp inputmode=numeric autocomplete=off placeholder="1.500.000"></div><small class=mu id=fbS></small></div><div><label class=req>Tanggal bayar</label><input id=fbD type=date value="${today}" max="${today}"></div><div><label class=req>Metode</label><select id=fbM>${metode.map(x => `<option>${esc(x)}</option>`).join('')}</select></div><div><label>Catatan / no. bukti (opsional)</label><input id=fbC maxlength=300 placeholder="Contoh: kwitansi kertas no. 0123"></div></div>
+  <label>Bukti bayar / invoice (opsional)</label>
+  <div class=drop id=fbDrop onclick="if(!event.target.closest('.fnm'))$('fbF').click()" ondragover="event.preventDefault();this.classList.add('ov')" ondragleave="this.classList.remove('ov')" ondrop="event.preventDefault();this.classList.remove('ov');$('fbF').files=event.dataTransfer.files;lFbFile()"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg><b>Klik atau seret foto/scan bukti ke sini</b><small>JPG, PNG, atau PDF · maks 5 MB · disimpan di LMS</small><input id=fbF type=file hidden accept=".jpg,.jpeg,.png,.pdf" onchange="lFbFile()"><div class=fnm></div></div>
   <div id=fbE class=ape role=alert></div>
   <div class=fbar style="margin-top:14px"><small>Pencatat: ${esc(me().name)} · tercatat di LMS dan audit log.</small><div><button class="btn o" onclick="LM.form=false;draw()">Batal</button><button class=btn id=fbOk onclick="lSimpanBayar(${m.id})">Simpan ke LMS</button></div></div></div>`;
 }
@@ -332,10 +334,13 @@ async function lSimpanBayar(uid) {
   if (!tg) return err('Isi tanggal bayar.');
   if (tg > lIso(new Date())) return err('Tanggal bayar tidak boleh di masa depan.');
   if (tid) { const o = $('fbT').selectedOptions[0]; if (n > +o.dataset.sisa) return err('Nominal melebihi sisa tagihan (' + Rp(+o.dataset.sisa) + ').'); }
+  const fb = $('fbF').files[0];
+  if (fb && !lOkBukti(fb)) return err('Bukti bayar harus JPG, PNG, atau PDF dengan ukuran maksimal 5 MB.');
   const m = LM.d.mById.get(uid), body = { user_id: uid, tagihan_id: tid || null, jenis: tid ? null : $('fbJ').value, keterangan: tid ? null : $('fbK').value.trim(), bulan_tagihan: tid ? null : $('fbB').value || null, nominal: n, tanggal_bayar: tg, metode: $('fbM').value, catatan: $('fbC').value.trim() };
-  if (!await ask({ tone: 'warn', title: 'Simpan pembayaran ke LMS?', msg: 'Pembayaran ini langsung tercatat sebagai pembayaran valid di LMS.', rows: [['Mahasiswa', m.nama + (m.npm ? ' (' + m.npm + ')' : '')], ['Untuk', tid ? $('fbT').selectedOptions[0].textContent : 'Tagihan baru: ' + body.jenis + (body.bulan_tagihan ? ' · ' + mLabel(body.bulan_tagihan) : '')], ['Nominal', Rp(n)], ['Tanggal bayar', fmtD(tg)], ['Metode', body.metode]], ok: 'Simpan ke LMS', no: 'Periksa lagi' })) return;
-  b.disabled = true; b.textContent = 'Menyimpan…';
+  if (!await ask({ tone: 'warn', title: 'Simpan pembayaran ke LMS?', msg: 'Pembayaran ini langsung tercatat sebagai pembayaran valid di LMS.', rows: [['Mahasiswa', m.nama + (m.npm ? ' (' + m.npm + ')' : '')], ['Untuk', tid ? $('fbT').selectedOptions[0].textContent : 'Tagihan baru: ' + body.jenis + (body.bulan_tagihan ? ' · ' + mLabel(body.bulan_tagihan) : '')], ['Nominal', Rp(n)], ['Tanggal bayar', fmtD(tg)], ['Metode', body.metode], ['Bukti bayar', fb ? fb.name : 'Tidak dilampirkan']], ok: 'Simpan ke LMS', no: 'Periksa lagi' })) return;
+  b.disabled = true; b.textContent = fb ? 'Mengunggah…' : 'Menyimpan…';
   try {
+    if (fb) body.bukti = await lBacaBukti(fb);
     const r = await API.post('/api/lms/pembayaran', body);
     log(`Catat pembayaran manual ${Rp(n)} untuk ${m.nama}${m.npm ? ' (' + m.npm + ')' : ''} ke LMS`); save();
     LM.form = false; await lmsLoad(true); alert(r.message || 'Pembayaran tersimpan.');
@@ -346,4 +351,37 @@ async function lBatal(id, nominal) {
   if (!v) return;
   try { const r = await API.post('/api/lms/pembayaran/' + encodeURIComponent(id) + '/batal', { alasan: v }); log(`Batalkan pembayaran manual ${Rp(nominal)} di LMS: ${v}`); save(); await lmsLoad(true); alert(r.message || 'Pembayaran dibatalkan.'); }
   catch (x) { alert(x.message); }
+}
+
+/* ---------- Bukti bayar ---------- */
+const lOkBukti = f => /\.(jpe?g|png|pdf)$/i.test(f.name) && f.size <= 5 * 1024 * 1024;
+function lFbFile() {
+  const el = $('fbF'), f = el.files[0], bx = el.parentNode.querySelector('.fnm');
+  if ($('fbE')) $('fbE').textContent = '';
+  if (!f) { bx.innerHTML = ''; return; }
+  const bad = !lOkBukti(f);
+  bx.innerHTML = `<div class="fchip${bad ? ' bad' : ''}"><span>${NI.pdf}</span><div><b>${esc(f.name)}</b><small>${(f.size / 1024).toFixed(0)} KB${bad ? ' · harus JPG/PNG/PDF maks 5 MB' : ''}</small></div><button type=button onclick="event.stopPropagation();$('fbF').value='';lFbFile()" aria-label="Hapus berkas">${NI.x}</button></div>`;
+}
+/* Berkas -> base64. Foto besar diperkecil (tetap terbaca) agar unggahan cepat. */
+function lBacaBukti(f) {
+  const kirim = blob => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok({ name: f.name.replace(/\.(png|jpe?g)$/i, m => blob.type === 'image/jpeg' ? '.jpg' : m), type: blob.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : /\.png$/i.test(f.name) ? 'image/png' : 'image/jpeg'), data: String(r.result).split(',')[1] }); r.onerror = () => no(new Error('Berkas tidak dapat dibaca.')); r.readAsDataURL(blob); });
+  if (!/^image\//.test(f.type) || f.size < 1.5e6) return kirim(f);
+  return new Promise(ok => { const i = new Image(); i.onload = () => { const k = Math.min(1, 2000 / Math.max(i.width, i.height)), c = document.createElement('canvas'); c.width = Math.round(i.width * k); c.height = Math.round(i.height * k); c.getContext('2d').drawImage(i, 0, 0, c.width, c.height); URL.revokeObjectURL(i.src); c.toBlob(b => ok(kirim(b || f)), 'image/jpeg', .85); }; i.onerror = () => ok(kirim(f)); i.src = URL.createObjectURL(f); });
+}
+function lAksiBukti(p, t) {
+  const sb = 'style="padding:6px 10px;font-size:12.5px"';
+  if (p.ada_bukti && /^\d+$/.test(p.id)) return `<a class="btn o" ${sb} href="/api/lms/bukti/pembayaran/${p.id}" target=_blank rel=noopener>Lihat bukti</a>${p.dari_keuangan && p.status == 'valid' ? ` <button class="btn o" ${sb} onclick="lUnggah('${esc(p.id)}')" title="Ganti bukti">Ganti</button>` : ''}`;
+  if (t.ada_bukti) return `<a class="btn o" ${sb} href="/api/lms/bukti/tagihan/${t.id}" target=_blank rel=noopener>Lihat bukti</a>`;
+  if (p.dari_keuangan && p.status == 'valid') return `<button class="btn o" ${sb} onclick="lUnggah('${esc(p.id)}')">Unggah bukti</button>`;
+  return '';
+}
+function lUnggah(id) {
+  const i = Object.assign(document.createElement('input'), { type: 'file', accept: '.jpg,.jpeg,.png,.pdf' });
+  i.onchange = async () => {
+    const f = i.files[0]; if (!f) return;
+    if (!lOkBukti(f)) return alert('Bukti bayar harus JPG, PNG, atau PDF dengan ukuran maksimal 5 MB.');
+    try { API.bar('Mengunggah bukti…'); const r = await API.post('/api/lms/pembayaran/' + encodeURIComponent(id) + '/bukti', { bukti: await lBacaBukti(f) }); API.bar(''); log('Unggah bukti bayar ke LMS (pembayaran #' + id + ')'); save(); await lmsLoad(true); alert(r.message || 'Bukti tersimpan.'); }
+    catch (x) { API.bar(''); alert(x.message); }
+  };
+  i.click();
 }

@@ -46,7 +46,7 @@ const kTerkunci = x => !!kasD().cek['W' + kSenin(x.date)];
 function kasv() {
   const k = kasD(), m = me(), adm = m.role === 'Admin', p = kPeriode(), d = kData(p), saldo = kSaldo();
   const cek = KK.mode === 'minggu' ? k.cek[p.key] : null;
-  const wt = (w2, t) => `<button class="${KK.w == w2 ? 'on' : ''}" onclick="KK.w='${w2}';KK.form=null;draw()">${t} <small style="opacity:.75;margin-left:8px;font-weight:500">${Rp(kSaldoW(w2))}</small></button>`;
+  const wt = (w2, t) => `<button class="${KK.w == w2 ? 'on' : ''}" onclick="if(KK.w!=='${w2}'){KK.w='${w2}';KK.form=null;window._kfade=1;draw()}">${t} <small style="opacity:.75;margin-left:8px;font-weight:500">${Rp(kSaldoW(w2))}</small></button>`;
   const K = [[`Saldo ${WL()} saat ini`, Rp(saldo), saldo < 0 ? 'Saldo minus, periksa catatan' : 'per hari ini', 'kas'], ['Penerimaan', Rp(d.masuk), p.label, 'new'], ['Pengeluaran', Rp(d.keluar), `${d.R.filter(x => x.t === 'out').length} transaksi`, 'rep'], ['Saldo akhir periode', Rp(d.akhir), `saldo awal ${Rp(d.awal)}`, 'audit']];
   const mx = Math.max(1, ...Object.values(d.cat));
   const tab = (k2, t) => `<button class="${KK.mode == k2 ? 'on' : ''}" onclick="KK.mode='${k2}';draw()">${t}</button>`;

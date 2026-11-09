@@ -68,8 +68,8 @@ function mhsv() {
   if (!LM.d) return lmsErr();
   const d = LM.d, tab = (k, t) => `<button class="${LM.tab == k ? 'on' : ''}" onclick="LM.tab='${k}';draw()">${t}</button>`;
   const info = `<div class=box style="padding:14px 18px"><div class=lh style="margin:0;align-items:center"><div><b>Terhubung ke LMS</b><small class=mu style="display:block">Data diperbarui ${new Date(d.diambil).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}${d.usang ? ' · <span style="color:var(--red)">LMS sedang tidak dapat dihubungi, menampilkan data terakhir</span>' : ''}. Verifikasi pembayaran tetap dilakukan di LMS.</small></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id=lmsBtn onclick="lmsLoad(true)">Muat Ulang Data</button>${d.lms_url ? `<a class="btn o" href="${esc(d.lms_url)}/kelola-tagihan" target=_blank rel=noopener>Buka LMS</a>` : ''}</div></div></div>`;
-  return info + `<div class=tabs style="display:inline-flex;margin:4px 0 14px">${tab('ring', 'Ringkasan')}${tab('mhs', 'Status Mahasiswa')}${tab('masuk', 'Uang Masuk')}</div>`
-    + (LM.tab == 'mhs' ? lTabMhs() : LM.tab == 'masuk' ? lTabMasuk() : lTabRing());
+  return info + `<div class=tabs style="display:inline-flex;margin:4px 0 14px">${tab('ring', 'Ringkasan')}${tab('mhs', 'Status Mahasiswa')}${tab('bulan', 'Cek Per Bulan')}${tab('masuk', 'Uang Masuk')}</div>`
+    + (LM.tab == 'mhs' ? lTabMhs() : LM.tab == 'bulan' ? lTabBulan() : LM.tab == 'masuk' ? lTabMasuk() : lTabRing());
 }
 
 function lmsErr() {
@@ -172,4 +172,55 @@ function lCsvMhs() {
 function lCsvMasuk() {
   lCsv('uang-masuk-mahasiswa.csv', ['Tanggal', 'NPM', 'Nama', 'Jenis tagihan', 'Periode', 'Pembayaran ke', 'Metode', 'Nominal'],
     (window._lmsMasuk || []).map(({ p, t, m }) => [lDay(p.tanggal), m ? m.npm : t.npm, m ? m.nama : t.nama, t.jenis, t.periode_label, p.ke || 1, p.metode, p.nominal]));
+}
+
+/* ---------- Cek per bulan: siapa yang sudah / belum bayar pada bulan tertentu ---------- */
+const BST = {
+  sudah: ['Sudah bayar', 's-Selesai'],
+  sebagian: ['Bayar sebagian', 's-Dalam-pertanggungjawaban'],
+  belum: ['Belum bayar', 's-Ditolak'],
+  luar: ['Bayar tagihan lain', 's-Selesai'],
+  tidak: ['Tidak ada jatuh tempo', ''],
+};
+LM.bln = ''; LM.bst = 'aktif'; LM.bq = '';
+const lBln = () => LM.bln || lIso(new Date()).slice(0, 7);
+function lBulanMhs(m, ym) {
+  const d = LM.d, T = d.tByUser.get(m.id) || [], items = [];
+  T.forEach(t => {
+    if (t.angsuran && t.angsuran.length) t.angsuran.filter(a => String(a.jatuh_tempo).slice(0, 7) === ym).forEach(a => items.push({ t, ket: 'Angsuran ke-' + a.ke, nominal: a.nominal, tempo: a.jatuh_tempo, lunas: a.status === 'lunas', sebagian: a.status === 'sebagian' }));
+    else if (String(t.deadline).slice(0, 7) === ym) items.push({ t, ket: 'Tagihan penuh', nominal: t.nominal, tempo: t.deadline, lunas: t.sisa <= 0, sebagian: t.dibayar > 0 && t.sisa > 0 });
+  });
+  const bayar = T.flatMap(t => (d.pByTagihan.get(t.id) || []).filter(p => p.status === 'valid' && lDay(p.tanggal).slice(0, 7) === ym).map(p => ({ p, t })));
+  const tunggu = T.some(t => (d.pByTagihan.get(t.id) || []).some(p => p.status === 'menunggu'));
+  const wajib = items.reduce((a, x) => a + x.nominal, 0), dibayar = bayar.reduce((a, x) => a + x.p.nominal, 0);
+  const st = items.length ? (items.every(x => x.lunas) ? 'sudah' : items.some(x => x.lunas || x.sebagian) ? 'sebagian' : 'belum') : dibayar > 0 ? 'luar' : 'tidak';
+  return { items, bayar, wajib, dibayar, st, tunggu };
+}
+function lTabBulan() {
+  const d = LM.d, ym = lBln(), sel = (k, lbl, opts, all = 'Semua') => `<div><label>${lbl}</label><select onchange="LM.${k}=this.value;lRefBulan()">${all ? `<option value="">${all}</option>` : ''}${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+  const geser = n => { const [y, mo] = ym.split('-').map(Number); return lIso(new Date(y, mo - 1 + n, 1)).slice(0, 7); };
+  return `<div class=box><div class=lh style="margin:0 0 6px;align-items:flex-end"><div><label style="margin-top:0">Bulan yang dicek</label><div style="display:flex;gap:8px;align-items:center"><button class="btn o" onclick="LM.bln='${geser(-1)}';draw()" title="Bulan sebelumnya">‹</button><input type=month value="${ym}" style="width:190px" onchange="if(this.value){LM.bln=this.value;draw()}"><button class="btn o" onclick="LM.bln='${geser(1)}';draw()" title="Bulan berikutnya">›</button></div></div><small class=mu style="max-width:520px">Menampilkan kewajiban yang <b>jatuh tempo</b> di ${mLabel(ym)} (angsuran atau tagihan) dan pembayaran yang <b>diterima</b> di bulan itu.</small></div>
+  <div class=g2 style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div><label>Cari nama / NPM</label><input value="${esc(LM.bq)}" placeholder="Ketik nama atau NPM" oninput="LM.bq=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefBulan,200)"></div>
+  ${sel('bst', 'Tampilkan', [['aktif', 'Wajib bayar / membayar bulan ini'], ...Object.entries(BST).map(([k, v]) => [k, v[0]]), ['', 'Semua mahasiswa']], '')}${sel('ang', 'Angkatan', d.angkatan.map(a => [a, '20' + a]))}${sel('pr', 'Program studi', d.prodi.map(p => [p, p]))}</div>
+  <div id=lmsB>${lRowsBulan()}</div></div>`;
+}
+function lRefBulan() { const e = $('lmsB'); if (e) e.innerHTML = lRowsBulan(); }
+function lRowsBulan() {
+  const d = LM.d, ym = lBln(), q = LM.bq.trim().toLowerCase();
+  const all = d.mahasiswa.filter(m => (!LM.ang || m.angkatan === LM.ang) && (!LM.pr || m.prodi === LM.pr) && (!q || (m.nama + ' ' + (m.npm || '')).toLowerCase().includes(q)))
+    .map(m => ({ m, b: lBulanMhs(m, ym) }));
+  const L = all.filter(x => LM.bst === '' ? true : LM.bst === 'aktif' ? x.b.st !== 'tidak' : x.b.st === LM.bst).sort((a, b) => (a.m.npm || '').localeCompare(b.m.npm || ''));
+  window._lmsBulan = L;
+  const c = k => all.filter(x => x.b.st === k).length, wj = all.filter(x => x.b.items.length);
+  const wajib = wj.reduce((a, x) => a + x.b.wajib, 0), masuk = all.reduce((a, x) => a + x.b.dibayar, 0);
+  const K = [['Wajib bayar', wj.length + ' mahasiswa', `kewajiban ${Rp(wajib)}`, 'list'], ['Sudah bayar', c('sudah'), `${wj.length ? Math.round(c('sudah') / wj.length * 100) : 0}% dari yang wajib bayar`, 'audit'], ['Belum / sebagian', c('belum') + c('sebagian'), `${c('belum')} belum sama sekali · ${c('sebagian')} sebagian`, 'rep'], ['Uang masuk ' + mLabel(ym), Rp(masuk), `${all.reduce((a, x) => a + x.b.bayar.length, 0)} transaksi`, 'new']];
+  const chip = k => `<div class="ai ${LM.bst == k ? 'on' : ''}" onclick="LM.bst='${k}';draw()"><b>${c(k)}</b><span>${BST[k][0]}</span></div>`;
+  return `<div class=kpis style="margin-top:16px">${K.map(([a, b, cc, k]) => `<div class=kpi><div class=kh><span>${a}</span><i class=ci>${IC[k]}</i></div><b>${b}</b><small>${cc}</small></div>`).join('')}</div>
+  <div class=attn><span class=al>${esc(mLabel(ym))}</span>${['sudah', 'sebagian', 'belum', 'luar'].map(chip).join('')}</div>
+  <div class=lh style="margin:4px 0 8px;align-items:center"><small class=mu>${L.length} mahasiswa ditampilkan</small><button class="btn o" onclick="lCsvBulan()" ${L.length ? '' : 'disabled'}>Ekspor Excel (CSV)</button></div>
+  <div class=tw><table><tr><th>NPM</th><th>Nama</th><th>Jatuh tempo bulan ini</th><th>Kewajiban</th><th>Dibayar bulan ini</th><th>Status</th><th></th></tr>${L.map(({ m, b }) => `<tr><td>${esc(m.npm || '-')}</td><td>${esc(m.nama)}<div class=mu style="font-size:12px">${esc(m.prodi || '')}</div></td><td style="font-size:12.5px">${b.items.map(x => `${esc(x.t.jenis)} · ${esc(x.ket)} <span class=mu>(${fmtD(x.tempo)})</span>`).join('<br>') || '<span class=mu>-</span>'}</td><td>${b.items.length ? Rp(b.wajib) : '-'}</td><td>${b.dibayar ? Rp(b.dibayar) : '-'}${b.bayar.length ? `<div class=mu style="font-size:12px">${b.bayar.map(x => lTgl(x.p.tanggal) + ' · ' + esc(x.p.metode || '-')).join('<br>')}</div>` : ''}</td><td><span class="bd ${BST[b.st][1]}">${BST[b.st][0]}</span>${b.st === 'belum' && b.dibayar ? '<div class=mu style="font-size:12px;margin-top:4px">Uang masuk untuk tunggakan lama</div>' : ''}${b.tunggu && b.st !== 'sudah' ? '<div class=mu style="font-size:12px;margin-top:4px">Ada bukti menunggu verifikasi</div>' : ''}</td><td><button class="btn o" onclick="go('mhsd',${m.id})">Buka</button></td></tr>`).join('') || `<tr><td colspan=7>Tidak ada mahasiswa yang cocok untuk ${esc(mLabel(ym))}.</td></tr>`}</table></div>`;
+}
+function lCsvBulan() {
+  lCsv('cek-pembayaran-' + lBln() + '.csv', ['Bulan', 'NPM', 'Nama', 'Prodi', 'Angkatan', 'Jatuh tempo bulan ini', 'Kewajiban', 'Dibayar bulan ini', 'Status'],
+    (window._lmsBulan || []).map(({ m, b }) => [lBln(), m.npm, m.nama, m.prodi, m.angkatan ? '20' + m.angkatan : '', b.items.map(x => x.t.jenis + ' - ' + x.ket + ' (' + x.tempo + ')').join('; '), b.wajib, b.dibayar, BST[b.st][0]]));
 }

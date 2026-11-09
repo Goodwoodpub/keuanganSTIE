@@ -1,6 +1,20 @@
 /* ===== Pembayaran Mahasiswa (data dari LMS, baca-saja) ===== */
 /* Tabel ringkas: teks boleh turun baris, baris dapat diklik (tanpa geser kanan-kiri). */
 document.head.insertAdjacentHTML('beforeend', `<style>
+.fbx{display:flex;flex-direction:column;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--bd,#e5eaf2)}
+.fbx .fsr{max-width:420px;min-width:240px}
+.fbx .fsr input{height:42px;margin:0}
+.fpl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.fp{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 4px 0 12px;border:1px solid #d6deea;border-radius:999px;background:#fff;margin:0;cursor:pointer;font-size:13px;font-weight:400;color:var(--mu,#64748b);transition:border-color .12s,background .12s;max-width:100%}
+.fp:hover{border-color:#9fb3d6}
+.fp span{white-space:nowrap}
+.fp select{border:0;background:transparent;padding:0 26px 0 2px;margin:0;height:34px;width:auto;min-width:0;max-width:220px;field-sizing:content;font-size:13px;font-weight:600;color:var(--tx,#0f172a);box-shadow:none;cursor:pointer;text-overflow:ellipsis}
+.fp select:focus{outline:none;box-shadow:none}
+.fp.on{border-color:var(--pr,#1e3a8a);background:#eef3fc;color:var(--pr,#1e3a8a)}
+.fp.on select{color:var(--pr,#1e3a8a)}
+.fpx{border:0;background:none;color:#b42318;font-size:13px;font-weight:600;cursor:pointer;padding:6px 8px;border-radius:8px}
+.fpx:hover{background:#fef3f2}
+
 .lmt{table-layout:auto}.lmt th,.lmt td{white-space:normal;padding:10px 8px;vertical-align:middle;line-height:1.35}
 .lmt th.n,.lmt td.n{text-align:right;white-space:nowrap}.lmt .bd{white-space:nowrap}
 .lmt td small,.lmt td .sm{display:block;font-size:12px;color:var(--mu);margin-top:2px}
@@ -59,22 +73,24 @@ function lmsIndex(d) {
 /* Filter mahasiswa bersama: jenjang (S1/S2), program studi, angkatan, status akademik */
 const lFilt = m => (!LM.jj || lJj(m) === LM.jj) && (!LM.ang || m.angkatan === LM.ang) && (!LM.pr || m.prodi === LM.pr) && (!LM.sa || (m.status_akademik || 'aktif') === LM.sa);
 const lFAktif = () => !!(LM.jj || LM.ang || LM.pr || LM.sa);
+/* Toolbar filter: kotak cari + "pil" filter ringkas */
+const lPill = (k, lbl, opts, oc, all = 'Semua', on) => `<label class="fp${(on ?? !!LM[k]) ? ' on' : ''}"><span>${lbl}</span><select onchange="${oc}">${all ? `<option value="">${all}</option>` : ''}${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
 function lFSel(ref) {
   const d = LM.d, pr = d.prodi.filter(p => !LM.jj || d.mahasiswa.some(m => m.prodi === p && lJj(m) === LM.jj));
   const ang = d.angkatan.filter(x => !LM.jj || d.mahasiswa.some(m => m.angkatan === x && lJj(m) === LM.jj));
-  const s = (k, lbl, opts, oc) => `<div><label>${lbl}</label><select onchange="${oc || `LM.${k}=this.value;${ref}()`}"><option value="">Semua</option>${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
-  const n = j => d.mahasiswa.filter(m => lJj(m) === j).length;
-  return s('jj', 'Jenjang', [['S1', `Sarjana (S1) · ${n('S1')}`], ['S2', `Magister (S2) · ${n('S2')}`]], "lSetJj(this.value)")
-    + s('pr', 'Program studi', pr.map(p => [p, p])) + s('ang', 'Angkatan', ang.map(x => [x, '20' + x]))
-    + s('sa', 'Status akademik', d.statusAk.map(([k, l]) => [k, l]));
+  const n = j => d.mahasiswa.filter(m => lJj(m) === j).length, oc = k => `LM.${k}=this.value;draw()`;
+  return lPill('jj', 'Jenjang', [['S1', `S1 (${n('S1')})`], ['S2', `S2 (${n('S2')})`]], 'lSetJj(this.value)')
+    + lPill('pr', 'Prodi', pr.map(p => [p, p]), oc('pr')) + lPill('ang', 'Angkatan', ang.map(x => [x, '20' + x]), oc('ang'))
+    + lPill('sa', 'Status akademik', d.statusAk.map(([k, l]) => [k, l]), oc('sa'));
 }
+const lFBar = (qk, ref, pills, ph = 'Cari nama atau NPM') => `<div class=fbx><div class="srch fsr">${SV.srch}<input value="${esc(LM[qk] || '')}" placeholder="${ph}" oninput="LM.${qk}=this.value;clearTimeout(window._lt);window._lt=setTimeout(${ref},200)"></div><div class=fpl>${pills}${lFReset()}</div></div>`;
 function lSetJj(v) {
   LM.jj = v; const d = LM.d;
   if (LM.pr && !d.mahasiswa.some(m => m.prodi === LM.pr && lJj(m) === v)) LM.pr = '';
   if (LM.ang && !d.mahasiswa.some(m => m.angkatan === LM.ang && (!v || lJj(m) === v))) LM.ang = '';
   draw();
 }
-const lFReset = () => lFAktif() ? `<a class=lnk2 style="cursor:pointer;white-space:nowrap" onclick="LM.jj='';LM.pr='';LM.ang='';LM.sa='';draw()">Hapus filter</a>` : '';
+const lFReset = () => (lFAktif() || LM.st || LM.per) ? `<button type=button class=fpx onclick="LM.jj='';LM.pr='';LM.ang='';LM.sa='';LM.st='';LM.per='';draw()">✕ Hapus filter</button>` : '';
 
 
 /* Tagihan dalam periode terpilih */
@@ -139,11 +155,9 @@ function lTabRing() {
 }
 
 function lTabMhs() {
-  const d = LM.d, sel = (k, lbl, opts) => `<div><label>${lbl}</label><select onchange="LM.${k}=this.value;lRefMhs()"><option value="">Semua</option>${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
-  return `<div class=box><div class=g2 style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div><label>Cari nama / NPM</label><input value="${esc(LM.q)}" placeholder="Ketik nama atau NPM" oninput="LM.q=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefMhs,200)"></div>
-  ${lFSel('lRefMhs')}${sel('st', 'Status pembayaran', Object.entries(LST).map(([k, v]) => [k, v[0]]))}
-  <div><label>Periode tagihan</label><select onchange="LM.per=this.value;lRefMhs()"><option value="">Semua periode</option>${d.periodes.map(([k, l]) => `<option value="${esc(k)}" ${k == LM.per ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div></div>
-  ${lFReset() ? `<div style="margin-top:6px">${lFReset()}</div>` : ''}<div id=lmsL>${lRowsMhs()}</div></div>`;
+  const d = LM.d;
+  return `<div class=box>${lFBar('q', 'lRefMhs', lFSel('lRefMhs') + lPill('st', 'Pembayaran', Object.entries(LST).map(([k, v]) => [k, v[0]]), "LM.st=this.value;draw()") + lPill('per', 'Periode', d.periodes, "LM.per=this.value;draw()", 'Semua periode'))}
+  <div id=lmsL>${lRowsMhs()}</div></div>`;
 }
 function lRefMhs() { const e = $('lmsL'); if (e) e.innerHTML = lRowsMhs(); }
 function lRowsMhs() {
@@ -251,8 +265,7 @@ function lTabBulan1() {
   const d = LM.d, ym = lBln(), sel = (k, lbl, opts, all = 'Semua') => `<div><label>${lbl}</label><select onchange="LM.${k}=this.value;lRefBulan()">${all ? `<option value="">${all}</option>` : ''}${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
   const geser = n => { const [y, mo] = ym.split('-').map(Number); return lIso(new Date(y, mo - 1 + n, 1)).slice(0, 7); };
   return `<div class=box><div class=lh style="margin:0 0 6px;align-items:flex-end"><div><label style="margin-top:0">Bulan yang dicek</label><div style="display:flex;gap:8px;align-items:center"><button class="btn o" onclick="LM.bln='${geser(-1)}';draw()" title="Bulan sebelumnya">‹</button><input type=month value="${ym}" style="width:190px" onchange="if(this.value){LM.bln=this.value;draw()}"><button class="btn o" onclick="LM.bln='${geser(1)}';draw()" title="Bulan berikutnya">›</button></div></div><small class=mu style="max-width:520px">Menampilkan tagihan/angsuran <b>untuk bulan</b> ${mLabel(ym)} (sesuai bulan yang dipilih bendahara saat membuat tagihan di LMS) dan pembayaran yang <b>diterima</b> di bulan itu.</small></div>
-  <div class=g2 style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div><label>Cari nama / NPM</label><input value="${esc(LM.bq)}" placeholder="Ketik nama atau NPM" oninput="LM.bq=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefBulan,200)"></div>
-  ${sel('bst', 'Tampilkan', [['aktif', 'Wajib bayar / membayar bulan ini'], ...Object.entries(BST).map(([k, v]) => [k, v[0]]), ['', 'Semua mahasiswa']], '')}${lFSel('lRefBulan')}</div>${lFReset() ? `<div style="margin-top:6px">${lFReset()}</div>` : ''}
+  ${lFBar('bq', 'lRefBulan', lPill('bst', 'Tampilkan', [['aktif', 'Wajib bayar / membayar bulan ini'], ...Object.entries(BST).map(([k, v]) => [k, v[0]]), ['', 'Semua mahasiswa']], "LM.bst=this.value;draw()", '', false) + lFSel('lRefBulan'))}
   <div id=lmsB>${lRowsBulan()}</div></div>`;
 }
 function lRefBulan() { const e = $('lmsB'); if (e) e.innerHTML = lRowsBulan(); }
@@ -293,8 +306,7 @@ function lCell(b, ym) {
 }
 function lTabTahun() {
   const d = LM.d, y = lThn(), sel = (k, lbl, opts) => `<div><label>${lbl}</label><select onchange="LM.${k}=this.value;lRefTahun()"><option value="">Semua</option>${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
-  return `<div class=box><div class=g2 style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div><label>Tahun</label><select onchange="LM.thn=this.value;draw()">${lTahunList().map(t => `<option ${t == y ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-  <div><label>Cari nama / NPM</label><input value="${esc(LM.bq)}" placeholder="Ketik nama atau NPM" oninput="LM.bq=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefTahun,200)"></div>${lFSel('lRefTahun')}</div>${lFReset() ? `<div style="margin-top:6px">${lFReset()}</div>` : ''}
+  return `<div class=box>${lFBar('bq', 'lRefTahun', `<label class="fp on"><span>Tahun</span><select onchange="LM.thn=this.value;draw()">${lTahunList().map(t => `<option ${t == y ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` + lFSel('lRefTahun'))}
   <div style="display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 4px;font-size:12.5px;color:var(--mu)">${['sudah', 'sebagian', 'belum', 'nanti'].map(k => `<span><b style="display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;background:${CELL[k][1]};color:${CELL[k][2]};margin-right:5px">${CELL[k][0]}</b>${CELL[k][3]}</span>`).join('')}<span>Kosong = tidak ada tagihan di bulan itu</span></div>
   <div id=lmsT>${lRowsTahun()}</div></div>`;
 }

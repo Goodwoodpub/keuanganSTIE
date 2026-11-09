@@ -255,6 +255,49 @@ app.get('/api/lms/snapshot', auth, wrap(async (req, res) => {
   res.json({ diambil: new Date(lmsCache.at).toISOString(), lms_url: LMS_URL, ...lmsCache.data });
 }));
 
+/* Catat / batalkan pembayaran manual di LMS (bendahara & pimpinan). */
+async function postLms(path, body) {
+  const ctl = new AbortController();
+  const tm = setTimeout(() => ctl.abort(), 25000);
+  try {
+    const r = await fetch(LMS_URL + path, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + LMS_TOKEN, Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'stie-keuangan/1.0' },
+      body: JSON.stringify(body), signal: ctl.signal,
+    });
+    let d = null; try { d = await r.json(); } catch (e) {}
+    if (!r.ok) {
+      const first = d && d.errors ? Object.values(d.errors).flat()[0] : null;
+      const e = new Error(first || (d && d.message) || (r.status === 404 ? 'Fitur pencatatan belum terpasang di LMS (perbarui file LMS).' : 'LMS menolak permintaan (status ' + r.status + ').'));
+      e.status = r.status >= 500 ? 502 : 422; throw e;
+    }
+    lmsCache = null; // data berubah: ambil ulang snapshot berikutnya
+    return d;
+  } catch (e) {
+    if (e.status) throw e;
+    const er = new Error(e.name === 'AbortError' ? 'LMS tidak merespons.' : 'Tidak dapat terhubung ke LMS: ' + e.message); er.status = 502; throw er;
+  } finally { clearTimeout(tm); }
+}
+const pencatat = u => `${u.name} (${u.role === 'Admin' ? 'Pimpinan' : u.role})`;
+
+app.post('/api/lms/pembayaran', auth, json, wrap(async (req, res) => {
+  if (!LMS_URL || !LMS_TOKEN) return res.status(503).json({ error: 'Integrasi LMS belum diatur.' });
+  const b = req.body || {};
+  const body = {
+    user_id: +b.user_id, tagihan_id: b.tagihan_id ? +b.tagihan_id : null,
+    jenis: b.jenis || null, keterangan: b.keterangan || null, bulan_tagihan: b.bulan_tagihan || null,
+    nominal: String(b.nominal || '').replace(/\D/g, ''), tanggal_bayar: b.tanggal_bayar, metode: b.metode,
+    catatan: b.catatan || null, pencatat: pencatat(req.user),
+  };
+  res.status(201).json(await postLms('/api/keuangan/pembayaran', body));
+}));
+
+app.post('/api/lms/pembayaran/:id/batal', auth, json, wrap(async (req, res) => {
+  if (!LMS_URL || !LMS_TOKEN) return res.status(503).json({ error: 'Integrasi LMS belum diatur.' });
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Pembayaran tidak valid.' });
+  res.json(await postLms('/api/keuangan/pembayaran/' + req.params.id + '/batal', { pencatat: pencatat(req.user), alasan: String(req.body?.alasan || '').slice(0, 200) || null }));
+}));
+
 app.use('/api', (req, res) => res.status(404).json({ error: 'Tidak ditemukan.' }));
 
 /* ---------- Frontend ---------- */
@@ -263,6 +306,7 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Ukuran data/berkas terlalu besar.' });
+  if (err.status && err.message && err.status !== 500) return res.status(err.status).json({ error: err.message });
   console.error(err);
   res.status(500).json({ error: 'Terjadi kesalahan pada server.' });
 });

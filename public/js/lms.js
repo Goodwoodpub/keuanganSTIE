@@ -78,6 +78,7 @@ const lMasuk = (dari, sampai) => LM.d.pembayaran.filter(p => p.status === 'valid
 
 /* ---------- Halaman utama ---------- */
 function mhsv() {
+  if (LM.d && LM.d.usangNotif && !LM.loading) { LM.d.usangNotif = false; lmsLoad(true); }
   if (!LM.d && !LM.err) { lmsLoad(); return `<div class=box><div class=empty>${IC.mhs}<b>Mengambil data dari LMS…</b><small>Mohon tunggu sebentar.</small></div></div>`; }
   if (!LM.d) return lmsErr();
   const d = LM.d, tab = (k, t) => `<button class="${LM.tab == k ? 'on' : ''}" onclick="LM.tab='${k}';draw()">${t}</button>`;
@@ -385,3 +386,26 @@ function lUnggah(id) {
   };
   i.click();
 }
+
+/* ---------- Notifikasi pembayaran mahasiswa dari LMS (akun pimpinan) ---------- */
+let lmsNotifBusy = false;
+async function lmsNotifSync() {
+  if (lmsNotifBusy || !S.me || !me() || me().role !== 'Admin' || API.busy) return;
+  lmsNotifBusy = true;
+  try {
+    const ada = new Set(S.notes.filter(n => n.lid).map(n => n.lid)), since = Math.max(0, ...ada);
+    let r; try { r = await API.get('/api/lms/events?since=' + since); } catch (e) { return; }
+    if (!r || !r.list || !r.list.length || API.busy || !S.me) return;
+    let baru = 0;
+    r.list.forEach(e => { if (ada.has(e.id)) return; S.notes.unshift({ role: 'Admin', m: e.m, t: new Date(e.at).toLocaleString('id-ID'), read: false, lid: e.id, mhs: e.user_id || null }); baru++; });
+    if (!baru) return;
+    save();
+    if (LM.d) LM.d.usangNotif = true; // data pembayaran berubah: muat ulang saat dibuka
+    const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName), dlgOpen = document.querySelector('#dlg.on, #pv[style*="block"], #lb[style*="flex"]');
+    if (!typing && !dlgOpen) draw();
+    API.bar(baru == 1 ? 'Ada 1 pembayaran mahasiswa baru dari LMS' : `Ada ${baru} pembayaran mahasiswa baru dari LMS`);
+  } finally { lmsNotifBusy = false; }
+}
+window.afterBoot = () => { setTimeout(lmsNotifSync, 1500); };
+setInterval(lmsNotifSync, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) lmsNotifSync(); });

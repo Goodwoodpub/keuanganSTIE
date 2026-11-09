@@ -245,7 +245,7 @@ app.get('/api/lms/snapshot', auth, wrap(async (req, res) => {
   const fresh = req.query.refresh === '1';
   if (!lmsCache || fresh || Date.now() - lmsCache.at > LMS_CACHE_MS) {
     lmsPending = lmsPending || fetchLms().finally(() => { lmsPending = null; });
-    try { lmsCache = await lmsPending; }
+    try { lmsCache = await lmsPending; lmsDiff(lmsCache.data).catch(e => console.error('lms-notif', e.message)); }
     catch (e) {
       // LMS sedang tidak dapat dihubungi: tampilkan data terakhir bila ada.
       if (lmsCache) return res.json({ diambil: new Date(lmsCache.at).toISOString(), usang: true, peringatan: e.message, ...lmsCache.data });
@@ -253,6 +253,64 @@ app.get('/api/lms/snapshot', auth, wrap(async (req, res) => {
     }
   }
   res.json({ diambil: new Date(lmsCache.at).toISOString(), lms_url: LMS_URL, ...lmsCache.data });
+}));
+
+/* ---------- Notifikasi pembayaran dari LMS untuk pimpinan ----------
+ * Server membandingkan snapshot LMS dengan kondisi terakhir yang dilihat. Pembayaran
+ * baru dari mahasiswa (bukti dikirim / pembayaran diterima) dicatat sebagai "kejadian"
+ * di tabel kv (bukan di data utama, agar tidak bentrok dengan pengguna yang sedang
+ * menyimpan). Browser pimpinan mengambil kejadian baru dan memasukkannya ke notifikasi. */
+const LMS_NOTIF_MENIT = Math.max(1, +process.env.LMS_NOTIF_MENIT || 3);
+const rupiah = n => 'Rp ' + (Math.round(+n || 0)).toLocaleString('id-ID');
+const blnLabel = ym => { if (!/^\d{4}-\d{2}$/.test(ym || '')) return ''; const [y, m] = ym.split('-'); return ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][+m - 1] + ' ' + y; };
+let lmsDiffBusy = false;
+async function lmsDiff(d) {
+  if (lmsDiffBusy || !d || !Array.isArray(d.pembayaran) || !Array.isArray(d.tagihan)) return;
+  lmsDiffBusy = true;
+  try {
+    const now = { p: {}, t: {} };
+    d.pembayaran.forEach(p => { if (/^\d+$/.test(String(p.id))) now.p[p.id] = p.status; });
+    d.tagihan.forEach(t => { now.t[t.id] = t.status; });
+    const prev = await store.getKV('lms_seen');
+    await store.setKV('lms_seen', now);
+    if (!prev) return; // pertama kali: catat kondisi awal saja, tanpa notifikasi
+    const mhs = new Map((d.mahasiswa || []).map(m => [m.id, m])), tg = new Map(d.tagihan.map(t => [t.id, t]));
+    const siapa = (uid, t) => { const m = mhs.get(uid); const n = m ? m.nama : (t && t.nama) || 'Mahasiswa'; const npm = m ? m.npm : t && t.npm; return n + (npm ? ' (' + npm + ')' : ''); };
+    const apa = (t, ke) => (t ? t.jenis : 'tagihan') + (t && t.bulan ? ' bulan ' + blnLabel(t.bulan) : '') + (ke > 1 ? ' cicilan ke-' + ke : '');
+    const ev = [];
+    d.pembayaran.forEach(p => {
+      if (!/^\d+$/.test(String(p.id)) || p.dari_keuangan) return;
+      const old = prev.p[p.id], t = tg.get(p.tagihan_id);
+      if (!old && p.status === 'menunggu') ev.push({ jenis: 'bukti', user_id: p.user_id, nominal: p.nominal, m: `Bukti bayar mahasiswa: ${siapa(p.user_id, t)} mengirim bukti ${apa(t, p.ke)} sebesar ${rupiah(p.nominal)}. Menunggu verifikasi bendahara di LMS.` });
+      if (p.status === 'valid' && old !== 'valid') ev.push({ jenis: 'diterima', user_id: p.user_id, nominal: p.nominal, m: `Pembayaran mahasiswa diterima: ${siapa(p.user_id, t)} membayar ${apa(t, p.ke)} sebesar ${rupiah(p.nominal)}${p.metode ? ' via ' + p.metode : ''}.` });
+    });
+    d.tagihan.forEach(t => {
+      if (t.status === 'menunggu_verifikasi' && prev.t[t.id] && prev.t[t.id] !== 'menunggu_verifikasi')
+        ev.push({ jenis: 'bukti', user_id: t.user_id, nominal: t.sisa, m: `Bukti bayar mahasiswa: ${siapa(t.user_id, t)} mengirim bukti pelunasan ${apa(t, 1)} sebesar ${rupiah(t.sisa)}. Menunggu verifikasi bendahara di LMS.` });
+    });
+    if (!ev.length) return;
+    const box = (await store.getKV('lms_events')) || { seq: 0, list: [] };
+    const at = new Date().toISOString();
+    const add = ev.length > 40
+      ? [{ jenis: 'ringkas', user_id: null, nominal: ev.reduce((a, e) => a + (e.jenis === 'diterima' ? +e.nominal || 0 : 0), 0), m: `Pembayaran mahasiswa diterima: ${ev.filter(e => e.jenis === 'diterima').length} pembayaran baru dan ${ev.filter(e => e.jenis === 'bukti').length} bukti bayar masuk di LMS sejak pemeriksaan terakhir.` }]
+      : ev;
+    add.forEach(e => box.list.push({ id: ++box.seq, at, ...e }));
+    box.list = box.list.slice(-300);
+    await store.setKV('lms_events', box);
+    console.log(`Notifikasi LMS: ${add.length} kejadian baru.`);
+  } finally { lmsDiffBusy = false; }
+}
+async function lmsWatch() {
+  if (!LMS_URL || !LMS_TOKEN) return;
+  try { lmsCache = await (lmsPending = lmsPending || fetchLms().finally(() => { lmsPending = null; })); await lmsDiff(lmsCache.data); }
+  catch (e) { console.error('Pemeriksaan LMS gagal:', e.message); }
+}
+
+app.get('/api/lms/events', auth, wrap(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (req.user.role !== 'Admin') return res.json({ list: [] });
+  const since = +req.query.since || 0, box = (await store.getKV('lms_events')) || { seq: 0, list: [] };
+  res.json({ seq: box.seq, list: box.list.filter(e => e.id > since) });
 }));
 
 /* Catat / batalkan pembayaran manual di LMS (bendahara & pimpinan). */
@@ -377,5 +435,6 @@ async function cleanup() {
   await store.init();
   await seedUsers();
   cleanup(); setInterval(cleanup, 6 * 3600e3).unref();
+  if (LMS_URL && LMS_TOKEN) { setTimeout(lmsWatch, 15000).unref(); setInterval(lmsWatch, LMS_NOTIF_MENIT * 60e3).unref(); }
   app.listen(PORT, () => console.log(`Server berjalan di port ${PORT} (penyimpanan: ${store.kind})`));
 })().catch(e => { console.error('Gagal memulai server:', e); process.exit(1); });

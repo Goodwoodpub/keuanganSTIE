@@ -1,4 +1,15 @@
 /* ===== Pembayaran Mahasiswa (data dari LMS, baca-saja) ===== */
+/* Tabel ringkas: teks boleh turun baris, baris dapat diklik (tanpa geser kanan-kiri). */
+document.head.insertAdjacentHTML('beforeend', `<style>
+.lmt{table-layout:auto}.lmt th,.lmt td{white-space:normal;padding:10px 8px;vertical-align:middle;line-height:1.35}
+.lmt th.n,.lmt td.n{text-align:right;white-space:nowrap}.lmt .bd{white-space:nowrap}
+.lmt td small,.lmt td .sm{display:block;font-size:12px;color:var(--mu);margin-top:2px}
+.lmt tr.ck{cursor:pointer}.lmt tr.ck:hover td{background:#f1f5fd}
+.lmt td.go{width:22px;padding-left:0;padding-right:4px;color:var(--mu)}.lmt td.go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+.lmt.yr th,.lmt.yr td{padding:7px 3px}.lmt.yr td.nm{padding-left:8px;min-width:150px}
+.lmf{border:1px solid var(--bd);border-radius:12px;padding:16px;margin-top:14px;background:#fbfcfe}
+@media(max-width:700px){.lmt .hm{display:none}}
+</style>`);
 const LM = { d: null, err: null, setup: false, loading: false, tab: 'ring', q: '', st: '', ang: '', pr: '', per: '', dari: '', sampai: '', uq: '' };
 IC.mhs = '<svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5M22 9v6"/></svg>';
 SUBT.mhs = 'Data mahasiswa, tagihan, dan uang masuk dari LMS';
@@ -12,6 +23,9 @@ const LST = {
   belum: ['Belum bayar', 's-Perlu-revisi'],
   kosong: ['Tidak ada tagihan', ''],
 };
+const lGo = id => `class=ck onclick="go('mhsd',${id})" title="Klik untuk melihat detail"`;
+const lChev = () => `<td class=go>${SV.chev}</td>`;
+const lMhsCell = (m, extra = '') => `<b>${esc(m.nama)}</b><small>${esc(m.npm || 'NPM -')}${m.prodi ? ' · ' + esc(m.prodi) : ''}${m.angkatan ? ' · 20' + esc(m.angkatan) : ''}${m.status_akademik && m.status_akademik != 'aktif' ? ' · ' + esc(m.status_akademik_label) : ''}${extra}</small>`;
 const lBadge = k => `<span class="bd ${LST[k][1]}">${LST[k][0]}</span>`;
 const lTgl = s => s ? new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 const lDay = s => String(s || '').slice(0, 10);
@@ -98,7 +112,7 @@ function lTabRing() {
   <div class=kpis>${K.map(([a, b, c, k]) => `<div class=kpi><div class=kh><span>${a}</span><i class=ci>${IC[k]}</i></div><b>${b}</b><small>${c}</small></div>`).join('')}</div>
   <div class=attn><span class=al>Mahasiswa</span>${['lunas', 'sebagian', 'menunggu', 'belum', 'nunggak', 'kosong'].map(k => `<div class="ai ${cnt(k) && k != 'lunas' && k != 'kosong' ? 'on' : ''}" onclick="LM.tab='mhs';LM.st='${k}';draw()"><b>${cnt(k)}</b><span>${LST[k][0]}</span></div>`).join('')}</div>
   <div class=g2b><div class=box><h4>Uang masuk per bulan</h4>${bulan}</div><div class=box><h4>Uang masuk per jenis tagihan</h4>${Object.keys(jn).length ? Object.entries(jn).sort((a, b) => b[1] - a[1]).map(([k, a]) => `<div class=bar2r><div class=bl><span>${esc(k)}</span><b>${Rp(a)}</b></div><div class=trk><i style="width:${Math.max(3, a / mxj * 100)}%"></i></div></div>`).join('') : `<div class=empty>${IC.rep}<b>Belum ada pembayaran</b></div>`}</div></div>
-  <div class=box><div class=bh><h4>Mahasiswa menunggak (sisa terbesar)</h4><a class=lnk2 onclick="LM.tab='mhs';LM.st='nunggak';draw()">Lihat semua →</a></div>${tg.length ? `<div class=tw><table><tr><th>NPM</th><th>Nama</th><th>Prodi</th><th>Sisa tagihan</th><th></th></tr>${tg.map(({ m, s }) => `<tr><td>${esc(m.npm || '-')}</td><td>${esc(m.nama)}</td><td>${esc(m.prodi || '-')}</td><td>${Rp(s.sisa)}</td><td><button class="btn o" onclick="go('mhsd',${m.id})">Buka</button></td></tr>`).join('')}</table></div>` : `<div class=empty>${IC.audit}<b>Tidak ada mahasiswa yang menunggak</b></div>`}</div>`;
+  <div class=box><div class=bh><h4>Mahasiswa menunggak (sisa terbesar)</h4><a class=lnk2 onclick="LM.tab='mhs';LM.st='nunggak';draw()">Lihat semua →</a></div>${tg.length ? `<div class=tw><table class=lmt><tr><th>Mahasiswa</th><th class=n>Sisa tagihan</th><th></th></tr>${tg.map(({ m, s }) => `<tr ${lGo(m.id)}><td>${lMhsCell(m)}</td><td class=n>${Rp(s.sisa)}</td>${lChev()}</tr>`).join('')}</table></div>` : `<div class=empty>${IC.audit}<b>Tidak ada mahasiswa yang menunggak</b></div>`}</div>`;
 }
 
 function lTabMhs() {
@@ -113,7 +127,8 @@ function lRowsMhs() {
   const L = lMhs().sort((a, b) => (a.m.npm || '').localeCompare(b.m.npm || '')); window._lmsRows = L;
   const s = k => L.reduce((a, x) => a + x.s[k], 0);
   return `<div class=lh style="margin:14px 0 8px;align-items:center"><small class=mu>${L.length} mahasiswa · tagihan ${Rp(s('total'))} · dibayar ${Rp(s('dibayar'))} · sisa ${Rp(s('sisa'))}</small><button class="btn o" onclick="lCsvMhs()" ${L.length ? '' : 'disabled'}>Ekspor Excel (CSV)</button></div>
-  <div class=tw><table><tr><th>NPM</th><th>Nama</th><th>Prodi</th><th>Angkatan</th><th>Total tagihan</th><th>Dibayar</th><th>Sisa</th><th>Status</th><th></th></tr>${L.map(({ m, s }) => `<tr><td>${esc(m.npm || '-')}</td><td>${esc(m.nama)}${m.status_akademik != 'aktif' ? ` <small class=mu>(${esc(m.status_akademik_label)})</small>` : ''}</td><td>${esc(m.prodi || '-')}</td><td>${m.angkatan ? '20' + esc(m.angkatan) : '-'}</td><td>${Rp(s.total)}</td><td>${Rp(s.dibayar)}</td><td>${Rp(s.sisa)}</td><td>${lBadge(s.st)}</td><td><button class="btn o" onclick="go('mhsd',${m.id})">Buka</button></td></tr>`).join('') || '<tr><td colspan=9>Tidak ada mahasiswa yang cocok dengan filter.</td></tr>'}</table></div>`;
+  <div class=tw><table class=lmt><tr><th>Mahasiswa</th><th class="n hm">Total tagihan</th><th class=n>Dibayar</th><th class=n>Sisa</th><th>Status</th><th></th></tr>${L.map(({ m, s }) => `<tr ${lGo(m.id)}><td>${lMhsCell(m)}</td><td class="n hm">${Rp(s.total)}</td><td class=n>${Rp(s.dibayar)}</td><td class=n>${Rp(s.sisa)}</td><td>${lBadge(s.st)}</td>${lChev()}</tr>`).join('') || '<tr><td colspan=6>Tidak ada mahasiswa yang cocok dengan filter.</td></tr>'}</table></div>
+  <small class=mu style="display:block;margin-top:8px">Klik baris untuk melihat detail tagihan, riwayat pembayaran, atau mencatat pembayaran manual.</small>`;
 }
 
 function lTabMasuk() {
@@ -134,12 +149,13 @@ function lRowsMasuk() {
   return `<div class=kpis style="margin-top:16px">${[['Total uang masuk', Rp(tot), all ? 'semua tanggal' : `${fmtD(LM.dari)} – ${fmtD(LM.sampai)}`, 'new'], ['Jumlah transaksi', L.length, `${new Set(L.map(x => x.p.user_id)).size} pembayar`, 'list'], ['Rata-rata per transaksi', Rp(L.length ? Math.round(tot / L.length) : 0), 'pembayaran tervalidasi', 'rep']].map(([a, b, c, k]) => `<div class=kpi><div class=kh><span>${a}</span><i class=ci>${IC[k]}</i></div><b>${b}</b><small>${c}</small></div>`).join('')}</div>
   ${Object.keys(mt).length ? `<div class=mu style="margin:4px 0 10px;font-size:13px">Per metode: ${Object.entries(mt).sort((a, b) => b[1] - a[1]).map(([k, a]) => `<b>${esc(k)}</b> ${Rp(a)}`).join(' · ')}</div>` : ''}
   <div class=lh style="margin:6px 0 8px;justify-content:flex-end"><button class="btn o" onclick="lCsvMasuk()" ${L.length ? '' : 'disabled'}>Ekspor Excel (CSV)</button></div>
-  <div class=tw><table><tr><th>Tanggal</th><th>NPM</th><th>Nama</th><th>Tagihan</th><th>Pembayaran ke</th><th>Metode</th><th>Nominal</th><th></th></tr>${L.map(({ p, t, m }) => `<tr><td>${lTgl(p.tanggal)}</td><td>${esc(m ? m.npm : t.npm || '-')}</td><td>${esc(m ? m.nama : t.nama || '-')}</td><td>${esc(t.jenis || '-')}${t.jenis && lBlnT(t) ? ` <small class=mu>bulan ${esc(mLabel(lBlnT(t)))}</small>` : t.periode_label ? ` <small class=mu>${esc(t.periode_label)}</small>` : ''}</td><td>${p.ke || 1}</td><td>${esc(p.metode || '-')}</td><td>${Rp(p.nominal)}</td><td>${m ? `<button class="btn o" onclick="go('mhsd',${m.id})">Buka</button>` : ''}</td></tr>`).join('') || '<tr><td colspan=8>Belum ada uang masuk pada rentang ini.</td></tr>'}${L.length ? `<tr class=trt><td colspan=6>Total</td><td>${Rp(tot)}</td><td></td></tr>` : ''}</table></div>`;
+  <div class=tw><table class=lmt><tr><th>Tanggal</th><th>Mahasiswa</th><th>Tagihan</th><th class=hm>Metode</th><th class=n>Nominal</th><th></th></tr>${L.map(({ p, t, m }) => `<tr ${m ? lGo(m.id) : ''}><td style="white-space:nowrap">${lTgl(p.tanggal)}</td><td>${m ? `<b>${esc(m.nama)}</b><small>${esc(m.npm || '-')}</small>` : `<b>${esc(t.nama || '-')}</b><small>${esc(t.npm || '')} · arsip/tanpa akun</small>`}</td><td>${esc(t.jenis || '-')}<small>${t.jenis && lBlnT(t) ? 'Bulan ' + esc(mLabel(lBlnT(t))) : esc(t.periode_label || '')}${(p.ke || 1) > 1 ? ' · pembayaran ke-' + p.ke : ''}</small></td><td class=hm>${esc(p.metode || '-')}${p.dari_keuangan ? '<small>dicatat manual</small>' : ''}</td><td class=n>${Rp(p.nominal)}</td>${m ? lChev() : '<td></td>'}</tr>`).join('') || '<tr><td colspan=6>Belum ada uang masuk pada rentang ini.</td></tr>'}${L.length ? `<tr class=trt><td colspan=4>Total</td><td class=n>${Rp(tot)}</td><td></td></tr>` : ''}</table></div>`;
 }
 
 /* ---------- Detail mahasiswa ---------- */
 function mhsdv() {
   if (!LM.d) return mhsv();
+  if (LM.formFor !== cur) { LM.form = false; LM.formFor = cur; }
   const d = LM.d, m = d.mById.get(cur);
   if (!m) return `<div class=box><div class=empty>${IC.mhs}<b>Mahasiswa tidak ditemukan</b></div><p style="text-align:center"><button class="btn o" onclick="go('mhs')">Kembali</button></p></div>`;
   const T = (d.tByUser.get(m.id) || []).slice().sort((a, b) => String(b.dibuat).localeCompare(String(a.dibuat)) || b.id - a.id);
@@ -157,8 +173,10 @@ function mhsdv() {
   <div class=box><div class=rzh><div><h3>Tagihan</h3><small>Status setiap tagihan sesuai data terakhir di LMS.</small></div></div>
   ${T.length ? T.map(t => `<div class=txc style="margin-top:12px"><div class=txb style="width:100%"><div class=txt><div><b>${esc(t.jenis)}</b>${t.keterangan ? `<div class=mu>${esc(t.keterangan)}</div>` : ''}<div class=meta><span>${NI.rc}${esc(t.nomor_invoice)}</span>${lBlnT(t) ? `<span>${NI.cal}Bulan ${esc(mLabel(lBlnT(t)))}</span>` : ''}${t.periode_label ? `<span>${NI.cal}${esc(t.periode_label)}</span>` : ''}<span>${NI.tag}${esc(t.skema)}</span><span>${NI.cal}Jatuh tempo ${fmtD(t.jatuh_tempo_berikutnya || t.deadline)}</span>${t.kwitansi ? `<span>${NI.pdf}Kwitansi ${esc(t.kwitansi)}</span>` : ''}</div></div><div style="text-align:right"><div class=amt>${Rp(t.nominal)}</div>${tBadge(t)}</div></div>
     <div class=prog style="margin-top:12px"><i style="width:${t.persen}%"></i></div><small class=pl>Dibayar ${Rp(t.dibayar)} (${t.persen}%) · sisa ${Rp(t.sisa)}${t.potongan ? ` · potongan ${Rp(t.potongan)}` : ''}</small>
-    ${t.angsuran && t.angsuran.length ? `<div class=tw style="margin-top:10px"><table><tr><th>Angsuran</th><th>Untuk bulan</th><th>Jatuh tempo</th><th>Nominal</th><th>Status</th></tr>${t.angsuran.map(a => `<tr><td>Ke-${a.ke}</td><td>${esc(mLabel(lBlnA(a)))}</td><td>${fmtD(a.jatuh_tempo)}</td><td>${Rp(a.nominal)}</td><td><span class="bd ${(aSt[a.status] || ['', ''])[1]}">${(aSt[a.status] || [a.status])[0]}</span></td></tr>`).join('')}</table></div>` : ''}</div></div>`).join('') : `<div class=empty style="margin-top:12px">${IC.list}<b>Belum ada tagihan untuk mahasiswa ini</b></div>`}</div>
-  <div class=box><h4>Riwayat pembayaran</h4><div class=tw><table><tr><th>Tanggal</th><th>Tagihan</th><th>Ke</th><th>Metode</th><th>Nominal</th><th>Status</th><th>Catatan</th></tr>${P.map(({ p, t }) => `<tr><td>${lTgl(p.tanggal)}</td><td>${esc(t.jenis)}${lBlnT(t) ? ` <small class=mu>bulan ${esc(mLabel(lBlnT(t)))}</small>` : t.periode_label ? ` <small class=mu>${esc(t.periode_label)}</small>` : ''}</td><td>${p.ke || 1}</td><td>${esc(p.metode || '-')}</td><td>${Rp(p.nominal)}</td><td>${pBadge(p.status)}</td><td>${esc(p.catatan || '')}</td></tr>`).join('') || '<tr><td colspan=7>Belum ada pembayaran.</td></tr>'}</table></div></div>`;
+    ${t.angsuran && t.angsuran.length ? `<div class=tw style="margin-top:10px"><table class=lmt><tr><th>Angsuran</th><th>Untuk bulan</th><th>Jatuh tempo</th><th>Nominal</th><th>Status</th></tr>${t.angsuran.map(a => `<tr><td>Ke-${a.ke}</td><td>${esc(mLabel(lBlnA(a)))}</td><td>${fmtD(a.jatuh_tempo)}</td><td>${Rp(a.nominal)}</td><td><span class="bd ${(aSt[a.status] || ['', ''])[1]}">${(aSt[a.status] || [a.status])[0]}</span></td></tr>`).join('')}</table></div>` : ''}</div></div>`).join('') : `<div class=empty style="margin-top:12px">${IC.list}<b>Belum ada tagihan untuk mahasiswa ini</b></div>`}</div>
+  <div class=box><div class=bh><h4>Riwayat pembayaran</h4>${LM.form ? '' : `<button class=btn onclick="LM.form=true;draw();setTimeout(()=>{const f=$('lmf');if(f)f.scrollIntoView({behavior:'smooth',block:'center'})},50)">+ Catat Pembayaran Manual</button>`}</div>
+  ${LM.form ? lFormBayar(m, T) : ''}
+  <div class=tw><table class=lmt><tr><th>Tanggal</th><th>Tagihan</th><th class=hm>Metode</th><th class=n>Nominal</th><th>Status</th><th></th></tr>${P.map(({ p, t }) => `<tr><td style="white-space:nowrap">${lTgl(p.tanggal)}</td><td>${esc(t.jenis)}<small>${lBlnT(t) ? 'Bulan ' + esc(mLabel(lBlnT(t))) : esc(t.periode_label || '')}${(p.ke || 1) > 1 ? ' · ke-' + p.ke : ''}</small>${p.catatan ? `<small>${esc(p.catatan)}</small>` : ''}</td><td class=hm>${esc(p.metode || '-')}</td><td class=n>${Rp(p.nominal)}</td><td>${pBadge(p.status)}</td><td style="text-align:right">${p.dari_keuangan && p.status == 'valid' ? `<button class="btn o" style="padding:6px 10px;font-size:12.5px" onclick="lBatal('${esc(p.id)}',${p.nominal})">Batalkan</button>` : ''}</td></tr>`).join('') || '<tr><td colspan=6>Belum ada pembayaran.</td></tr>'}</table></div></div>`;
 }
 
 /* ---------- Ekspor CSV ---------- */
@@ -228,7 +246,7 @@ function lRowsBulan() {
   return `<div class=kpis style="margin-top:16px">${K.map(([a, b, cc, k]) => `<div class=kpi><div class=kh><span>${a}</span><i class=ci>${IC[k]}</i></div><b>${b}</b><small>${cc}</small></div>`).join('')}</div>
   <div class=attn><span class=al>${esc(mLabel(ym))}</span>${['sudah', 'sebagian', 'belum', 'luar'].map(chip).join('')}</div>
   <div class=lh style="margin:4px 0 8px;align-items:center"><small class=mu>${L.length} mahasiswa ditampilkan</small><button class="btn o" onclick="lCsvBulan()" ${L.length ? '' : 'disabled'}>Ekspor Excel (CSV)</button></div>
-  <div class=tw><table><tr><th>NPM</th><th>Nama</th><th>Tagihan bulan ini</th><th>Kewajiban</th><th>Dibayar bulan ini</th><th>Status</th><th></th></tr>${L.map(({ m, b }) => `<tr><td>${esc(m.npm || '-')}</td><td>${esc(m.nama)}<div class=mu style="font-size:12px">${esc(m.prodi || '')}</div></td><td style="font-size:12.5px">${b.items.map(x => `${esc(x.t.jenis)} · ${esc(x.ket)} <span class=mu>(jatuh tempo ${fmtD(x.tempo)})</span>`).join('<br>') || '<span class=mu>-</span>'}</td><td>${b.items.length ? Rp(b.wajib) : '-'}</td><td>${b.dibayar ? Rp(b.dibayar) : '-'}${b.bayar.length ? `<div class=mu style="font-size:12px">${b.bayar.map(x => lTgl(x.p.tanggal) + ' · ' + esc(x.p.metode || '-')).join('<br>')}</div>` : ''}</td><td><span class="bd ${BST[b.st][1]}">${BST[b.st][0]}</span>${b.st === 'belum' && b.dibayar ? '<div class=mu style="font-size:12px;margin-top:4px">Uang masuk untuk tunggakan lama</div>' : ''}${b.tunggu && b.st !== 'sudah' ? '<div class=mu style="font-size:12px;margin-top:4px">Ada bukti menunggu verifikasi</div>' : ''}</td><td><button class="btn o" onclick="go('mhsd',${m.id})">Buka</button></td></tr>`).join('') || `<tr><td colspan=7>Tidak ada mahasiswa yang cocok untuk ${esc(mLabel(ym))}.</td></tr>`}</table></div>`;
+  <div class=tw><table class=lmt><tr><th>Mahasiswa</th><th class=hm>Tagihan bulan ini</th><th class=n>Kewajiban</th><th class=n>Dibayar bulan ini</th><th>Status</th><th></th></tr>${L.map(({ m, b }) => `<tr ${lGo(m.id)}><td>${lMhsCell(m)}</td><td class=hm style="font-size:12.5px">${b.items.map(x => `${esc(x.t.jenis)} · ${esc(x.ket)} <span class=mu>(jatuh tempo ${fmtD(x.tempo)})</span>`).join('<br>') || '<span class=mu>-</span>'}</td><td class=n>${b.items.length ? Rp(b.wajib) : '-'}</td><td class=n>${b.dibayar ? Rp(b.dibayar) : '-'}${b.bayar.length ? `<small>${b.bayar.map(x => lTgl(x.p.tanggal) + ' · ' + esc(x.p.metode || '-')).join('<br>')}</small>` : ''}</td><td><span class="bd ${BST[b.st][1]}">${BST[b.st][0]}</span>${b.st === 'belum' && b.dibayar ? '<div class=mu style="font-size:12px;margin-top:4px">Uang masuk untuk tunggakan lama</div>' : ''}${b.tunggu && b.st !== 'sudah' ? '<div class=mu style="font-size:12px;margin-top:4px">Ada bukti menunggu verifikasi</div>' : ''}</td>${lChev()}</tr>`).join('') || `<tr><td colspan=6>Tidak ada mahasiswa yang cocok untuk ${esc(mLabel(ym))}.</td></tr>`}</table></div>`;
 }
 function lCsvBulan() {
   lCsv('cek-pembayaran-' + lBln() + '.csv', ['Bulan', 'NPM', 'Nama', 'Prodi', 'Angkatan', 'Tagihan bulan ini', 'Kewajiban', 'Dibayar bulan ini', 'Status'],
@@ -266,11 +284,11 @@ function lRowsTahun() {
   window._lmsTahun = { y, M, L };
   if (!L.length) return `<div class=empty style="margin-top:12px">${IC.lpjm}<b>Belum ada tagihan bulanan di tahun ${esc(y)}</b><small>Tagihan muncul di sini setelah bendahara membuat tagihan dengan pilihan "Tagihan untuk bulan" di LMS.</small></div>`;
   const tot = M.map((_, i) => ({ s: L.filter(x => x.C[i] === 'sudah').length, w: L.filter(x => x.C[i] !== 'kosong').length }));
-  const td = (c, b, ym, id) => `<td style="text-align:center;padding:6px 4px"><button type=button onclick="LM.bln='${ym}';LM.bmode='bulan';go('mhsd',${id})" title="${esc(mLabel(ym))}: ${CELL[c][3]}${b.items.length ? ' · tagihan ' + Rp(b.wajib) : ''}${b.dibayar ? ' · dibayar ' + Rp(b.dibayar) : ''}" style="width:30px;height:28px;border:0;border-radius:7px;background:${CELL[c][1]};color:${CELL[c][2]};font-weight:800;cursor:pointer">${CELL[c][0]}</button></td>`;
+  const td = (c, b, ym, id) => `<td style="text-align:center"><button type=button onclick="LM.bln='${ym}';LM.bmode='bulan';go('mhsd',${id})" title="${esc(mLabel(ym))}: ${CELL[c][3]}${b.items.length ? ' · tagihan ' + Rp(b.wajib) : ''}${b.dibayar ? ' · dibayar ' + Rp(b.dibayar) : ''}" style="width:26px;height:26px;border:0;border-radius:7px;background:${CELL[c][1]};color:${CELL[c][2]};font-weight:800;cursor:pointer">${CELL[c][0]}</button></td>`;
   return `<div class=lh style="margin:10px 0 8px;align-items:center"><small class=mu>${L.length} mahasiswa dengan tagihan di ${esc(y)} · arahkan kursor ke kotak untuk detail, klik untuk membuka mahasiswa</small><button class="btn o" onclick="lCsvTahun()">Ekspor Excel (CSV)</button></div>
-  <div class=tw><table><tr><th>NPM</th><th>Nama</th>${M.map(ym => `<th style="text-align:center;padding:8px 2px">${lBlnPendek(ym)}</th>`).join('')}<th style="text-align:right">Lunas</th></tr>
-  ${L.map(({ m, B, C }) => `<tr><td>${esc(m.npm || '-')}</td><td style="white-space:nowrap">${esc(m.nama)}</td>${C.map((c, i) => td(c, B[i], M[i], m.id)).join('')}<td style="text-align:right;white-space:nowrap">${C.filter(c => c === 'sudah').length}/${C.filter(c => c !== 'kosong').length}</td></tr>`).join('')}
-  <tr class=trt><td colspan=2>Sudah bayar</td>${tot.map(t => `<td style="text-align:center;font-size:12px">${t.w ? t.s + '/' + t.w : ''}</td>`).join('')}<td></td></tr></table></div>`;
+  <div class=tw><table class="lmt yr"><tr><th style="padding-left:8px">Mahasiswa</th>${M.map(ym => `<th style="text-align:center">${lBlnPendek(ym)}</th>`).join('')}<th class=n>Lunas</th></tr>
+  ${L.map(({ m, B, C }) => `<tr><td class=nm><b>${esc(m.nama)}</b><small>${esc(m.npm || '-')}</small></td>${C.map((c, i) => td(c, B[i], M[i], m.id)).join('')}<td class=n>${C.filter(c => c === 'sudah').length}/${C.filter(c => c !== 'kosong').length}</td></tr>`).join('')}
+  <tr class=trt><td style="text-align:left">Sudah bayar</td>${tot.map(t => `<td style="text-align:center;font-size:12px;padding:10px 2px">${t.w ? t.s + '/' + t.w : ''}</td>`).join('')}<td></td></tr></table></div>`;
 }
 function lCsvTahun() {
   const { y, M, L } = window._lmsTahun || {}; if (!L) return;
@@ -286,4 +304,46 @@ function lPerBulanMhs(m) {
   if (!M.length) return '';
   return `<div class=box><h4>Pembayaran per bulan</h4><small class=mu>Status setiap bulan tagihan. Klik bulan untuk membuka daftar Cek Per Bulan.</small>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">${M.map(ym => { const b = lBulanMhs(m, ym), c = lCell(b, ym); return `<button type=button onclick="LM.tab='bulan';LM.bmode='bulan';LM.bln='${ym}';go('mhs')" title="${CELL[c][3]} · tagihan ${Rp(b.wajib)}" style="border:1px solid var(--bd);border-radius:10px;background:${CELL[c][1] === 'transparent' ? '#fff' : CELL[c][1]};color:${CELL[c][2]};padding:8px 12px;text-align:left;cursor:pointer;min-width:118px"><b style="display:block;font-size:13px">${CELL[c][0]} ${esc(mLabel(ym))}</b><small style="font-size:11.5px">${CELL[c][3]} · ${Rp(b.wajib)}</small></button>`; }).join('')}</div></div>`;
+}
+
+/* ---------- Catat pembayaran manual (tersimpan di LMS) ---------- */
+function lFormBayar(m, T) {
+  const d = LM.d, open = T.filter(t => t.sisa > 0), today = lIso(new Date());
+  const jenis = (d.jenis_tagihan && d.jenis_tagihan.length ? d.jenis_tagihan : ['UKT / SPP Semester', 'Uang Pangkal', 'Praktikum', 'Lainnya']);
+  const metode = (d.metode && d.metode.length ? d.metode : ['Transfer Bank', 'Tunai', 'Virtual Account', 'QRIS', 'Lainnya']);
+  return `<div class=lmf id=lmf><h4 style="margin-top:0">Catat pembayaran yang sudah diterima</h4>
+  <p class=mu style="margin:-4px 0 10px;font-size:13px">Untuk pembayaran ${esc(m.nama)} yang sudah diterima tetapi belum tercatat. Data langsung tersimpan di LMS (ikut membuka akses perkuliahan bila tagihan terbayar) dan masuk laporan uang masuk sesuai tanggal bayar.</p>
+  <label>Pembayaran untuk</label><select id=fbT onchange="lFbSync()"><option value="">Tagihan baru (belum ada tagihannya di LMS)</option>${open.map(t => `<option value="${t.id}" data-sisa="${t.sisa}">${esc(t.jenis)}${lBlnT(t) ? ' · bulan ' + esc(mLabel(lBlnT(t))) : ''} · sisa ${Rp(t.sisa)}</option>`).join('')}</select>
+  <div id=fbBaru class=g2 style="margin-top:4px"><div><label class=req>Jenis tagihan</label><select id=fbJ>${jenis.map(j => `<option>${esc(j)}</option>`).join('')}</select></div><div><label>Keterangan (opsional)</label><input id=fbK maxlength=255 placeholder="Contoh: SPP Maret 2026"></div><div><label>Untuk bulan (opsional)</label><input id=fbB type=month></div></div>
+  <div class=g2 style="margin-top:4px"><div><label class=req>Nominal dibayar</label><div class=pre><span>Rp</span><input id=fbN class=rp inputmode=numeric autocomplete=off placeholder="1.500.000"></div><small class=mu id=fbS></small></div><div><label class=req>Tanggal bayar</label><input id=fbD type=date value="${today}" max="${today}"></div><div><label class=req>Metode</label><select id=fbM>${metode.map(x => `<option>${esc(x)}</option>`).join('')}</select></div><div><label>Catatan / no. bukti (opsional)</label><input id=fbC maxlength=300 placeholder="Contoh: kwitansi kertas no. 0123"></div></div>
+  <div id=fbE class=ape role=alert></div>
+  <div class=fbar style="margin-top:14px"><small>Pencatat: ${esc(me().name)} · tercatat di LMS dan audit log.</small><div><button class="btn o" onclick="LM.form=false;draw()">Batal</button><button class=btn id=fbOk onclick="lSimpanBayar(${m.id})">Simpan ke LMS</button></div></div></div>`;
+}
+function lFbSync() {
+  const s = $('fbT'), baru = !s.value, o = s.selectedOptions[0];
+  $('fbBaru').style.display = baru ? '' : 'none';
+  $('fbS').textContent = baru ? '' : 'Maksimal ' + Rp(+o.dataset.sisa) + ' (sisa tagihan)';
+  if (!baru && !num('fbN')) $('fbN').value = fm(+o.dataset.sisa);
+}
+async function lSimpanBayar(uid) {
+  const e = $('fbE'), b = $('fbOk'), tid = $('fbT').value, n = num('fbN'), tg = $('fbD').value, err = m => { e.textContent = m; return false; };
+  e.textContent = '';
+  if (!(n >= 1000)) return err('Isi nominal minimal Rp 1.000.');
+  if (!tg) return err('Isi tanggal bayar.');
+  if (tg > lIso(new Date())) return err('Tanggal bayar tidak boleh di masa depan.');
+  if (tid) { const o = $('fbT').selectedOptions[0]; if (n > +o.dataset.sisa) return err('Nominal melebihi sisa tagihan (' + Rp(+o.dataset.sisa) + ').'); }
+  const m = LM.d.mById.get(uid), body = { user_id: uid, tagihan_id: tid || null, jenis: tid ? null : $('fbJ').value, keterangan: tid ? null : $('fbK').value.trim(), bulan_tagihan: tid ? null : $('fbB').value || null, nominal: n, tanggal_bayar: tg, metode: $('fbM').value, catatan: $('fbC').value.trim() };
+  if (!await ask({ tone: 'warn', title: 'Simpan pembayaran ke LMS?', msg: 'Pembayaran ini langsung tercatat sebagai pembayaran valid di LMS.', rows: [['Mahasiswa', m.nama + (m.npm ? ' (' + m.npm + ')' : '')], ['Untuk', tid ? $('fbT').selectedOptions[0].textContent : 'Tagihan baru: ' + body.jenis + (body.bulan_tagihan ? ' · ' + mLabel(body.bulan_tagihan) : '')], ['Nominal', Rp(n)], ['Tanggal bayar', fmtD(tg)], ['Metode', body.metode]], ok: 'Simpan ke LMS', no: 'Periksa lagi' })) return;
+  b.disabled = true; b.textContent = 'Menyimpan…';
+  try {
+    const r = await API.post('/api/lms/pembayaran', body);
+    log(`Catat pembayaran manual ${Rp(n)} untuk ${m.nama}${m.npm ? ' (' + m.npm + ')' : ''} ke LMS`); save();
+    LM.form = false; await lmsLoad(true); alert(r.message || 'Pembayaran tersimpan.');
+  } catch (x) { if (b.isConnected) { b.disabled = false; b.textContent = 'Simpan ke LMS'; } e.textContent = x.message; }
+}
+async function lBatal(id, nominal) {
+  const v = await ask({ tone: 'bad', title: 'Batalkan pembayaran ini?', msg: 'Pembayaran yang dicatat manual akan dibatalkan di LMS dan status tagihan dihitung ulang. Tagihan yang dibuat khusus untuk catatan ini ikut dihapus.', rows: [['Nominal', Rp(nominal)]], input: { label: 'Alasan pembatalan', hint: 'Contoh: salah input nominal', err: 'Tulis alasan pembatalan.' }, ok: 'Batalkan Pembayaran', no: 'Kembali' });
+  if (!v) return;
+  try { const r = await API.post('/api/lms/pembayaran/' + encodeURIComponent(id) + '/batal', { alasan: v }); log(`Batalkan pembayaran manual ${Rp(nominal)} di LMS: ${v}`); save(); await lmsLoad(true); alert(r.message || 'Pembayaran dibatalkan.'); }
+  catch (x) { alert(x.message); }
 }

@@ -10,7 +10,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .lmf{border:1px solid var(--bd);border-radius:12px;padding:16px;margin-top:14px;background:#fbfcfe}
 @media(max-width:700px){.lmt .hm{display:none}}
 </style>`);
-const LM = { d: null, err: null, setup: false, loading: false, tab: 'ring', q: '', st: '', ang: '', pr: '', per: '', dari: '', sampai: '', uq: '' };
+const LM = { d: null, err: null, setup: false, loading: false, tab: 'ring', q: '', st: '', ang: '', pr: '', per: '', dari: '', sampai: '', uq: '', jj: '', sa: '' };
 IC.mhs = '<svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5M22 9v6"/></svg>';
 SUBT.mhs = 'Data mahasiswa, tagihan, dan uang masuk dari LMS';
 SUBT.mhsd = 'Status tagihan dan riwayat pembayaran mahasiswa';
@@ -25,7 +25,8 @@ const LST = {
 };
 const lGo = id => `class=ck onclick="go('mhsd',${id})" title="Klik untuk melihat detail"`;
 const lChev = () => `<td class=go>${SV.chev}</td>`;
-const lMhsCell = (m, extra = '') => `<b>${esc(m.nama)}</b><small>${esc(m.npm || 'NPM -')}${m.prodi ? ' · ' + esc(m.prodi) : ''}${m.angkatan ? ' · 20' + esc(m.angkatan) : ''}${m.status_akademik && m.status_akademik != 'aktif' ? ' · ' + esc(m.status_akademik_label) : ''}${extra}</small>`;
+const lJj = m => /magister|\bs2\b/i.test(m.prodi || '') ? 'S2' : (m.jenjang === 'S2' ? 'S2' : 'S1');
+const lMhsCell = (m, extra = '') => `<b>${esc(m.nama)}</b><small>${esc(m.npm || 'NPM -')} · ${lJj(m)}${m.prodi ? ' · ' + esc(m.prodi) : ''}${m.angkatan ? ' · 20' + esc(m.angkatan) : ''}${m.status_akademik && m.status_akademik != 'aktif' ? ' · ' + esc(m.status_akademik_label) : ''}${extra}</small>`;
 const lBadge = k => `<span class="bd ${LST[k][1]}">${LST[k][0]}</span>`;
 const lTgl = s => s ? new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 const lDay = s => String(s || '').slice(0, 10);
@@ -53,7 +54,28 @@ function lmsIndex(d) {
   d.periodes = [...new Map(d.tagihan.filter(t => t.tahun_ajaran).map(t => [lPerKey(t), t.periode_label])).entries()].sort((a, b) => b[0].localeCompare(a[0]));
   d.angkatan = [...new Set(d.mahasiswa.map(m => m.angkatan).filter(Boolean))].sort().reverse();
   d.prodi = [...new Set(d.mahasiswa.map(m => m.prodi).filter(Boolean))].sort();
+  d.statusAk = [...new Map(d.mahasiswa.map(m => [m.status_akademik || 'aktif', m.status_akademik_label || 'Aktif'])).entries()];
 }
+/* Filter mahasiswa bersama: jenjang (S1/S2), program studi, angkatan, status akademik */
+const lFilt = m => (!LM.jj || lJj(m) === LM.jj) && (!LM.ang || m.angkatan === LM.ang) && (!LM.pr || m.prodi === LM.pr) && (!LM.sa || (m.status_akademik || 'aktif') === LM.sa);
+const lFAktif = () => !!(LM.jj || LM.ang || LM.pr || LM.sa);
+function lFSel(ref) {
+  const d = LM.d, pr = d.prodi.filter(p => !LM.jj || d.mahasiswa.some(m => m.prodi === p && lJj(m) === LM.jj));
+  const ang = d.angkatan.filter(x => !LM.jj || d.mahasiswa.some(m => m.angkatan === x && lJj(m) === LM.jj));
+  const s = (k, lbl, opts, oc) => `<div><label>${lbl}</label><select onchange="${oc || `LM.${k}=this.value;${ref}()`}"><option value="">Semua</option>${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+  const n = j => d.mahasiswa.filter(m => lJj(m) === j).length;
+  return s('jj', 'Jenjang', [['S1', `Sarjana (S1) · ${n('S1')}`], ['S2', `Magister (S2) · ${n('S2')}`]], "lSetJj(this.value)")
+    + s('pr', 'Program studi', pr.map(p => [p, p])) + s('ang', 'Angkatan', ang.map(x => [x, '20' + x]))
+    + s('sa', 'Status akademik', d.statusAk.map(([k, l]) => [k, l]));
+}
+function lSetJj(v) {
+  LM.jj = v; const d = LM.d;
+  if (LM.pr && !d.mahasiswa.some(m => m.prodi === LM.pr && lJj(m) === v)) LM.pr = '';
+  if (LM.ang && !d.mahasiswa.some(m => m.angkatan === LM.ang && (!v || lJj(m) === v))) LM.ang = '';
+  draw();
+}
+const lFReset = () => lFAktif() ? `<a class=lnk2 style="cursor:pointer;white-space:nowrap" onclick="LM.jj='';LM.pr='';LM.ang='';LM.sa='';draw()">Hapus filter</a>` : '';
+
 
 /* Tagihan dalam periode terpilih */
 const lTag = list => (list || []).filter(t => !LM.per || lPerKey(t) === LM.per);
@@ -68,7 +90,7 @@ function lSum(m) {
 }
 const lMhs = () => {
   const q = LM.q.trim().toLowerCase();
-  return LM.d.mahasiswa.filter(m => (!LM.ang || m.angkatan === LM.ang) && (!LM.pr || m.prodi === LM.pr)
+  return LM.d.mahasiswa.filter(m => lFilt(m)
     && (!q || (m.nama + ' ' + (m.npm || '')).toLowerCase().includes(q))).map(m => ({ m, s: lSum(m) }))
     .filter(x => !LM.st || x.s.st === LM.st);
 };
@@ -119,9 +141,9 @@ function lTabRing() {
 function lTabMhs() {
   const d = LM.d, sel = (k, lbl, opts) => `<div><label>${lbl}</label><select onchange="LM.${k}=this.value;lRefMhs()"><option value="">Semua</option>${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
   return `<div class=box><div class=g2 style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div><label>Cari nama / NPM</label><input value="${esc(LM.q)}" placeholder="Ketik nama atau NPM" oninput="LM.q=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefMhs,200)"></div>
-  ${sel('st', 'Status pembayaran', Object.entries(LST).map(([k, v]) => [k, v[0]]))}${sel('ang', 'Angkatan', d.angkatan.map(a => [a, '20' + a]))}${sel('pr', 'Program studi', d.prodi.map(p => [p, p]))}
+  ${lFSel('lRefMhs')}${sel('st', 'Status pembayaran', Object.entries(LST).map(([k, v]) => [k, v[0]]))}
   <div><label>Periode tagihan</label><select onchange="LM.per=this.value;lRefMhs()"><option value="">Semua periode</option>${d.periodes.map(([k, l]) => `<option value="${esc(k)}" ${k == LM.per ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div></div>
-  <div id=lmsL>${lRowsMhs()}</div></div>`;
+  ${lFReset() ? `<div style="margin-top:6px">${lFReset()}</div>` : ''}<div id=lmsL>${lRowsMhs()}</div></div>`;
 }
 function lRefMhs() { const e = $('lmsL'); if (e) e.innerHTML = lRowsMhs(); }
 function lRowsMhs() {
@@ -186,8 +208,8 @@ function lCsv(name, head, rows) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + L.join('\n')], { type: 'text/csv' })); a.download = name; a.click();
 }
 function lCsvMhs() {
-  lCsv('status-pembayaran-mahasiswa.csv', ['NPM', 'Nama', 'Prodi', 'Angkatan', 'Status akademik', 'Total tagihan', 'Dibayar', 'Sisa', 'Status pembayaran'],
-    (window._lmsRows || []).map(({ m, s }) => [m.npm, m.nama, m.prodi, m.angkatan ? '20' + m.angkatan : '', m.status_akademik_label, s.total, s.dibayar, s.sisa, LST[s.st][0]]));
+  lCsv('status-pembayaran-mahasiswa.csv', ['NPM', 'Nama', 'Jenjang', 'Prodi', 'Angkatan', 'Status akademik', 'Total tagihan', 'Dibayar', 'Sisa', 'Status pembayaran'],
+    (window._lmsRows || []).map(({ m, s }) => [m.npm, m.nama, lJj(m), m.prodi, m.angkatan ? '20' + m.angkatan : '', m.status_akademik_label, s.total, s.dibayar, s.sisa, LST[s.st][0]]));
 }
 function lCsvMasuk() {
   lCsv('uang-masuk-mahasiswa.csv', ['Tanggal', 'NPM', 'Nama', 'Jenis tagihan', 'Periode', 'Pembayaran ke', 'Metode', 'Nominal'],
@@ -230,13 +252,13 @@ function lTabBulan1() {
   const geser = n => { const [y, mo] = ym.split('-').map(Number); return lIso(new Date(y, mo - 1 + n, 1)).slice(0, 7); };
   return `<div class=box><div class=lh style="margin:0 0 6px;align-items:flex-end"><div><label style="margin-top:0">Bulan yang dicek</label><div style="display:flex;gap:8px;align-items:center"><button class="btn o" onclick="LM.bln='${geser(-1)}';draw()" title="Bulan sebelumnya">‹</button><input type=month value="${ym}" style="width:190px" onchange="if(this.value){LM.bln=this.value;draw()}"><button class="btn o" onclick="LM.bln='${geser(1)}';draw()" title="Bulan berikutnya">›</button></div></div><small class=mu style="max-width:520px">Menampilkan tagihan/angsuran <b>untuk bulan</b> ${mLabel(ym)} (sesuai bulan yang dipilih bendahara saat membuat tagihan di LMS) dan pembayaran yang <b>diterima</b> di bulan itu.</small></div>
   <div class=g2 style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div><label>Cari nama / NPM</label><input value="${esc(LM.bq)}" placeholder="Ketik nama atau NPM" oninput="LM.bq=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefBulan,200)"></div>
-  ${sel('bst', 'Tampilkan', [['aktif', 'Wajib bayar / membayar bulan ini'], ...Object.entries(BST).map(([k, v]) => [k, v[0]]), ['', 'Semua mahasiswa']], '')}${sel('ang', 'Angkatan', d.angkatan.map(a => [a, '20' + a]))}${sel('pr', 'Program studi', d.prodi.map(p => [p, p]))}</div>
+  ${sel('bst', 'Tampilkan', [['aktif', 'Wajib bayar / membayar bulan ini'], ...Object.entries(BST).map(([k, v]) => [k, v[0]]), ['', 'Semua mahasiswa']], '')}${lFSel('lRefBulan')}</div>${lFReset() ? `<div style="margin-top:6px">${lFReset()}</div>` : ''}
   <div id=lmsB>${lRowsBulan()}</div></div>`;
 }
 function lRefBulan() { const e = $('lmsB'); if (e) e.innerHTML = lRowsBulan(); }
 function lRowsBulan() {
   const d = LM.d, ym = lBln(), q = LM.bq.trim().toLowerCase();
-  const all = d.mahasiswa.filter(m => (!LM.ang || m.angkatan === LM.ang) && (!LM.pr || m.prodi === LM.pr) && (!q || (m.nama + ' ' + (m.npm || '')).toLowerCase().includes(q)))
+  const all = d.mahasiswa.filter(m => lFilt(m) && (!q || (m.nama + ' ' + (m.npm || '')).toLowerCase().includes(q)))
     .map(m => ({ m, b: lBulanMhs(m, ym) }));
   const L = all.filter(x => LM.bst === '' ? true : LM.bst === 'aktif' ? x.b.st !== 'tidak' : x.b.st === LM.bst).sort((a, b) => (a.m.npm || '').localeCompare(b.m.npm || ''));
   window._lmsBulan = L;
@@ -272,14 +294,14 @@ function lCell(b, ym) {
 function lTabTahun() {
   const d = LM.d, y = lThn(), sel = (k, lbl, opts) => `<div><label>${lbl}</label><select onchange="LM.${k}=this.value;lRefTahun()"><option value="">Semua</option>${opts.map(([v, t]) => `<option value="${esc(v)}" ${v == LM[k] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
   return `<div class=box><div class=g2 style="margin-top:0;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div><label>Tahun</label><select onchange="LM.thn=this.value;draw()">${lTahunList().map(t => `<option ${t == y ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-  <div><label>Cari nama / NPM</label><input value="${esc(LM.bq)}" placeholder="Ketik nama atau NPM" oninput="LM.bq=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefTahun,200)"></div>${sel('ang', 'Angkatan', d.angkatan.map(a => [a, '20' + a]))}${sel('pr', 'Program studi', d.prodi.map(p => [p, p]))}</div>
+  <div><label>Cari nama / NPM</label><input value="${esc(LM.bq)}" placeholder="Ketik nama atau NPM" oninput="LM.bq=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefTahun,200)"></div>${lFSel('lRefTahun')}</div>${lFReset() ? `<div style="margin-top:6px">${lFReset()}</div>` : ''}
   <div style="display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 4px;font-size:12.5px;color:var(--mu)">${['sudah', 'sebagian', 'belum', 'nanti'].map(k => `<span><b style="display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;background:${CELL[k][1]};color:${CELL[k][2]};margin-right:5px">${CELL[k][0]}</b>${CELL[k][3]}</span>`).join('')}<span>Kosong = tidak ada tagihan di bulan itu</span></div>
   <div id=lmsT>${lRowsTahun()}</div></div>`;
 }
 function lRefTahun() { const e = $('lmsT'); if (e) e.innerHTML = lRowsTahun(); }
 function lRowsTahun() {
   const d = LM.d, y = lThn(), q = LM.bq.trim().toLowerCase(), M = Array.from({ length: 12 }, (_, i) => y + '-' + String(i + 1).padStart(2, '0'));
-  const L = d.mahasiswa.filter(m => (!LM.ang || m.angkatan === LM.ang) && (!LM.pr || m.prodi === LM.pr) && (!q || (m.nama + ' ' + (m.npm || '')).toLowerCase().includes(q)))
+  const L = d.mahasiswa.filter(m => lFilt(m) && (!q || (m.nama + ' ' + (m.npm || '')).toLowerCase().includes(q)))
     .map(m => { const B = M.map(ym => lBulanMhs(m, ym)); return { m, B, C: B.map((b, i) => lCell(b, M[i])) }; })
     .filter(x => x.C.some(c => c !== 'kosong')).sort((a, b) => (a.m.npm || '').localeCompare(b.m.npm || ''));
   window._lmsTahun = { y, M, L };

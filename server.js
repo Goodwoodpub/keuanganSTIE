@@ -256,14 +256,34 @@ app.get('/api/lms/snapshot', auth, wrap(async (req, res) => {
 }));
 
 /* Catat / batalkan pembayaran manual di LMS (bendahara & pimpinan). */
+/* Bukti bayar dikirim browser sebagai base64 -> diteruskan ke LMS sebagai multipart. */
+const BUKTI_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' };
+function bacaBukti(b) {
+  if (!b || !b.data) return null;
+  const type = String(b.type || '').toLowerCase();
+  if (!BUKTI_MIME[type]) { const e = new Error('Bukti bayar harus berupa JPG, PNG, atau PDF.'); e.status = 422; throw e; }
+  const buf = Buffer.from(String(b.data), 'base64');
+  if (!buf.length) { const e = new Error('Berkas bukti kosong.'); e.status = 422; throw e; }
+  if (buf.length > 5 * 1024 * 1024) { const e = new Error('Ukuran bukti bayar maksimal 5 MB.'); e.status = 422; throw e; }
+  const name = String(b.name || ('bukti.' + BUKTI_MIME[type])).replace(/[\\/\r\n"]/g, '_').slice(0, 150);
+  return { buf, type, name };
+}
+function multipart(fields, bukti) {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) if (v !== null && v !== undefined && v !== '') fd.append(k, String(v));
+  if (bukti) fd.append('bukti', new Blob([bukti.buf], { type: bukti.type }), bukti.name);
+  return fd;
+}
+
 async function postLms(path, body) {
   const ctl = new AbortController();
-  const tm = setTimeout(() => ctl.abort(), 25000);
+  const tm = setTimeout(() => ctl.abort(), 45000);
+  const isForm = body instanceof FormData;
   try {
     const r = await fetch(LMS_URL + path, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + LMS_TOKEN, Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'stie-keuangan/1.0' },
-      body: JSON.stringify(body), signal: ctl.signal,
+      headers: { Authorization: 'Bearer ' + LMS_TOKEN, Accept: 'application/json', 'User-Agent': 'stie-keuangan/1.0', ...(isForm ? {} : { 'Content-Type': 'application/json' }) },
+      body: isForm ? body : JSON.stringify(body), signal: ctl.signal,
     });
     let d = null; try { d = await r.json(); } catch (e) {}
     if (!r.ok) {
@@ -289,13 +309,36 @@ app.post('/api/lms/pembayaran', auth, json, wrap(async (req, res) => {
     nominal: String(b.nominal || '').replace(/\D/g, ''), tanggal_bayar: b.tanggal_bayar, metode: b.metode,
     catatan: b.catatan || null, pencatat: pencatat(req.user),
   };
-  res.status(201).json(await postLms('/api/keuangan/pembayaran', body));
+  const bukti = bacaBukti(b.bukti);
+  res.status(201).json(await postLms('/api/keuangan/pembayaran', bukti ? multipart(body, bukti) : body));
 }));
 
 app.post('/api/lms/pembayaran/:id/batal', auth, json, wrap(async (req, res) => {
   if (!LMS_URL || !LMS_TOKEN) return res.status(503).json({ error: 'Integrasi LMS belum diatur.' });
   if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Pembayaran tidak valid.' });
   res.json(await postLms('/api/keuangan/pembayaran/' + req.params.id + '/batal', { pencatat: pencatat(req.user), alasan: String(req.body?.alasan || '').slice(0, 200) || null }));
+}));
+
+app.post('/api/lms/pembayaran/:id/bukti', auth, json, wrap(async (req, res) => {
+  if (!LMS_URL || !LMS_TOKEN) return res.status(503).json({ error: 'Integrasi LMS belum diatur.' });
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Pembayaran tidak valid.' });
+  const bukti = bacaBukti(req.body?.bukti);
+  if (!bukti) return res.status(422).json({ error: 'Pilih berkas bukti bayar.' });
+  res.json(await postLms('/api/keuangan/pembayaran/' + req.params.id + '/bukti', multipart({ pencatat: pencatat(req.user) }, bukti)));
+}));
+
+/* Lihat bukti bayar yang tersimpan di LMS (diteruskan apa adanya). */
+app.get('/api/lms/bukti/:jenis/:id', auth, wrap(async (req, res) => {
+  if (!LMS_URL || !LMS_TOKEN) return res.status(503).send('Integrasi LMS belum diatur.');
+  const { jenis, id } = req.params;
+  if (!['pembayaran', 'tagihan'].includes(jenis) || !/^\d+$/.test(id)) return res.status(400).send('Permintaan tidak valid.');
+  let r;
+  try { r = await fetch(`${LMS_URL}/api/keuangan/bukti/${jenis}/${id}`, { headers: { Authorization: 'Bearer ' + LMS_TOKEN, 'User-Agent': 'stie-keuangan/1.0' } }); }
+  catch (e) { return res.status(502).send('Tidak dapat terhubung ke LMS.'); }
+  if (!r.ok) return res.status(r.status === 404 ? 404 : 502).send(r.status === 404 ? 'Bukti bayar tidak ditemukan di LMS.' : 'LMS menolak permintaan (status ' + r.status + ').');
+  const type = r.headers.get('content-type') || 'application/octet-stream';
+  res.set({ 'Content-Type': type, 'Content-Disposition': r.headers.get('content-disposition') || 'inline', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  res.send(Buffer.from(await r.arrayBuffer()));
 }));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Tidak ditemukan.' }));

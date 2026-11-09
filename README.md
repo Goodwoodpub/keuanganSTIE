@@ -67,6 +67,19 @@ Setiap `git push` ke branch `main` akan otomatis men-deploy ulang. Data tetap am
 
 > Jika `store` menunjukkan `"file"`, berarti `DATABASE_URL` belum terhubung, dan data akan **hilang** setiap redeploy. Pastikan langkah 2–3 sudah benar.
 
+## Integrasi dengan LMS (Pembayaran Mahasiswa)
+
+Menu **Pembayaran Mahasiswa** menampilkan data dari LMS STIE Krakatau secara baca-saja:
+- **Ringkasan**: total tagihan, sudah dibayar, piutang, uang masuk per bulan dan per jenis tagihan, mahasiswa menunggak.
+- **Status Mahasiswa**: setiap mahasiswa dengan status Lunas / Dibayar sebagian / Menunggu verifikasi / Belum bayar / Menunggak, bisa difilter per periode, angkatan, prodi; klik untuk melihat tagihan, angsuran, dan riwayat pembayarannya.
+- **Uang Masuk**: semua pembayaran yang sudah divalidasi di LMS, per rentang tanggal, lengkap dengan total dan per metode; bisa diekspor ke Excel (CSV).
+
+Verifikasi pembayaran tetap dilakukan di LMS. Data diambil ulang otomatis tiap 2 menit, atau seketika lewat tombol **Muat Ulang Data**.
+
+Cara mengaktifkan:
+1. Unggah file integrasi ke LMS (paket `lms-integrasi-keuangan.zip`) dan isi `KEUANGAN_API_TOKEN` di `.env` LMS.
+2. Di Railway → Variables tambahkan `LMS_API_URL` (mis. `https://lms.stiekrakatau.ac.id`) dan `LMS_API_TOKEN` (token yang sama).
+
 ## Catatan keamanan
 
 - Aturan alur kerja (siapa boleh menyetujui, mencairkan, dsb.) masih dijalankan di sisi tampilan, sama seperti versi aslinya. Server sudah mewajibkan login dan membatasi fitur admin (kelola pengguna, reset data) hanya untuk pimpinan, tetapi belum memeriksa setiap langkah persetujuan. Untuk pemakaian internal kampus dengan akun terbatas ini memadai; bila nanti dibuka lebih luas, validasi per aksi sebaiknya dipindah ke server.

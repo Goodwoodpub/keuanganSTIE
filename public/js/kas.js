@@ -110,9 +110,8 @@ async function kSimpan() {
   if (lama && kTerkunci(lama)) return err('Minggu transaksi ini sudah diperiksa pimpinan, sehingga tidak dapat diubah.');
   if (kasD().cek['W' + kSenin(date)]) return err('Minggu pada tanggal tersebut sudah diperiksa pimpinan. Pilih tanggal lain atau minta pimpinan membatalkan pemeriksaan.');
   if (out) {
-    const saldoTgl = kSaldo(date) + (lama && lama.t === 'out' && lama.date <= date ? +lama.amt : 0);
     const saldoKini = kSaldo() + (lama && lama.t === 'out' ? +lama.amt : 0);
-    if (amt > Math.min(saldoTgl, saldoKini)) return err(`Saldo ${WL()} tidak cukup (tersedia ${Rp(Math.max(0, Math.min(saldoTgl, saldoKini)))}). Catat penerimaan kas kecil terlebih dahulu.`);
+    if (amt > saldoKini && !await ask({ tone: 'warn', title: 'Saldo belum mencukupi', msg: `Saldo ${WL()} yang tercatat saat ini ${Rp(saldoKini)}, lebih kecil dari pengeluaran ini. Pengeluaran tetap disimpan dan saldo akan tampil minus sampai penerimaannya dicatat.`, ok: 'Tetap simpan', no: 'Periksa lagi' })) return;
     if (KK.w === 'kas' && amt > k.maks && !await ask({ tone: 'warn', title: 'Melebihi batas kas kecil', msg: `Nominal ${Rp(amt)} di atas batas kas kecil ${Rp(k.maks)} per transaksi. Belanja sebesar ini sebaiknya diajukan lewat Request Dana. Tetap catat sebagai kas kecil?`, ok: 'Tetap catat', no: 'Periksa lagi' })) return;
   }
   const data = { t: f.t, date, desc, amt, note: $('kkK').value.trim(), cat: out ? $('kkC').value : null, shop: out ? $('kkS').value.trim() : '', nota: out ? f.nota.slice() : [] };
@@ -127,8 +126,7 @@ async function kSimpan() {
 }
 async function kHapus(id) {
   const k = kasD(), x = k.tx.find(y => y.id === id); if (!x || !kBolehUbah(x)) return;
-  if (x.t === 'in' && kSaldo() - x.amt < 0) return alert('Penerimaan ini tidak dapat dihapus karena saldo ' + WL() + ' akan menjadi minus. Hapus atau ubah pengeluarannya terlebih dahulu.');
-  if (!await ask({ tone: 'bad', title: 'Hapus transaksi ' + WL() + '?', msg: 'Transaksi akan dihapus dari catatan ' + WL() + '.', rows: [['Tanggal', fmtD(x.date)], ['Uraian', x.desc], ['Nominal', Rp(x.amt)]], ok: 'Hapus', no: 'Batal' })) return;
+  if (!await ask({ tone: 'bad', title: 'Hapus transaksi ' + WL() + '?', msg: 'Transaksi akan dihapus dari catatan ' + WL() + '.' + (x.t === 'in' && kSaldo() - x.amt < 0 ? ' Saldo akan menjadi minus setelah penerimaan ini dihapus.' : ''), rows: [['Tanggal', fmtD(x.date)], ['Uraian', x.desc], ['Nominal', Rp(x.amt)]], ok: 'Hapus', no: 'Batal' })) return;
   k.tx = k.tx.filter(y => y.id !== id); log(`Hapus transaksi ${WL()}: ${x.desc} ${Rp(x.amt)}`); save(); draw();
 }
 async function kCek(ya) {
@@ -198,7 +196,6 @@ async function kSisa(jenis) {
 async function kHapusLink(lk) {
   const a1 = kasW('rbf').tx.find(x => x.link === lk), a2 = kasW('kas').tx.find(x => x.link === lk);
   if (!a1) return;
-  if (a2 && kSaldoW('kas') - a2.amt < 0) return alert('Tidak dapat dibatalkan karena saldo kas kecil akan menjadi minus.');
   if (!await ask({ tone: 'bad', title: 'Batalkan transaksi ini?', msg: a2 ? 'Alokasi ke kas kecil dibatalkan; dana kembali menjadi sisa dana reimburse.' : 'Pengembalian ke pimpinan dibatalkan; dana kembali menjadi sisa dana reimburse.', rows: [['Nominal', Rp(a1.amt)], ['Tanggal', fmtD(a1.date)]], ok: 'Batalkan', no: 'Kembali' })) return;
   kasW('rbf').tx = kasW('rbf').tx.filter(x => x.link !== lk); kasW('kas').tx = kasW('kas').tx.filter(x => x.link !== lk);
   log(`Batalkan ${a2 ? 'alokasi' : 'pengembalian'} sisa dana reimburse ${Rp(a1.amt)}`); save(); draw();

@@ -402,7 +402,15 @@ app.get('/api/lms/bukti/:jenis/:id', auth, wrap(async (req, res) => {
 app.use('/api', (req, res) => res.status(404).json({ error: 'Tidak ditemukan.' }));
 
 /* ---------- Frontend ---------- */
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: PROD ? '1h' : 0, index: 'index.html' }));
+/* Berkas aplikasi (html/js/css) selalu dicek ulang ke server (ETag) supaya
+   pembaruan dari GitHub langsung terpakai tanpa perlu hapus cache browser. */
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: 'index.html',
+  setHeaders: (res, file) => {
+    if (/\.(html|js|css)$/i.test(file)) res.set('Cache-Control', 'no-cache');
+    else res.set('Cache-Control', PROD ? 'public, max-age=86400' : 'no-cache');
+  },
+}));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.use((err, req, res, next) => {

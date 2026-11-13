@@ -24,7 +24,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .lmf{border:1px solid var(--bd);border-radius:12px;padding:16px;margin-top:14px;background:#fbfcfe}
 a.lbk,button.lbk{display:inline-flex;align-items:center;gap:5px;text-decoration:none}.lbk svg{width:14px;height:14px;flex:none}@media(max-width:700px){.lmt .hm{display:none}}
 </style>`);
-const LM = { d: null, err: null, setup: false, loading: false, tab: 'ring', q: '', st: '', ang: '', pr: '', per: '', dari: '', sampai: '', uq: '', hv: 'hari', hm: '', jj: '', sa: '' };
+const LM = { d: null, err: null, setup: false, loading: false, tab: 'ring', q: '', st: '', ang: '', pr: '', per: '', dari: '', sampai: '', uq: '', hv: 'hari', hm: '', bs: 'menunggu', bq: '', jj: '', sa: '' };
 IC.mhs = '<svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5M22 9v6"/></svg>';
 SUBT.mhs = 'Data mahasiswa, tagihan, dan uang masuk dari LMS';
 SUBT.mhsd = 'Status tagihan dan riwayat pembayaran mahasiswa';
@@ -121,8 +121,8 @@ function mhsv() {
   if (!LM.d) return lmsErr();
   const d = LM.d, tab = (k, t) => `<button class="${LM.tab == k ? 'on' : ''}" onclick="LM.tab='${k}';draw()">${t}</button>`;
   const info = `<div class=box style="padding:14px 18px"><div class=lh style="margin:0;align-items:center"><div><b>Terhubung ke LMS</b><small class=mu style="display:block">Data diperbarui ${new Date(d.diambil).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}${d.usang ? ' · <span style="color:var(--red)">LMS sedang tidak dapat dihubungi, menampilkan data terakhir</span>' : ''}. Verifikasi pembayaran tetap dilakukan di LMS.</small></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn o" id=lmsBtn onclick="lmsLoad(true)">Muat Ulang Data</button>${d.lms_url ? `<a class="btn o" href="${esc(d.lms_url)}/kelola-tagihan" target=_blank rel=noopener>Buka LMS</a>` : ''}</div></div></div>`;
-  return info + `<div class=tabs style="display:inline-flex;margin:4px 0 14px">${tab('ring', 'Ringkasan')}${tab('mhs', 'Status Mahasiswa')}${tab('bulan', 'Cek Per Bulan')}${tab('masuk', 'Uang Masuk')}</div>`
-    + (LM.tab == 'mhs' ? lTabMhs() : LM.tab == 'bulan' ? lTabBulan() : LM.tab == 'masuk' ? lTabMasuk() : lTabRing());
+  return info + `<div class=tabs style="display:inline-flex;margin:4px 0 14px">${tab('ring', 'Ringkasan')}${tab('mhs', 'Status Mahasiswa')}${tab('bulan', 'Cek Per Bulan')}${tab('masuk', 'Uang Masuk')}${tab('bukti', 'Bukti Bayar' + ((n => n ? ` <span class=tbn>${n}</span>` : '')(lBukti().filter(x => x.st == 'menunggu').length)))}</div>`
+    + (LM.tab == 'mhs' ? lTabMhs() : LM.tab == 'bulan' ? lTabBulan() : LM.tab == 'masuk' ? lTabMasuk() : LM.tab == 'bukti' ? lTabBukti() : lTabRing());
 }
 
 function lmsErr() {
@@ -220,6 +220,52 @@ function lRowsMasuk() {
   <div class=lh style="margin:6px 0 8px;justify-content:flex-end"><button class="btn o" onclick="lCsvMasuk()" ${L.length ? '' : 'disabled'}>Ekspor Excel (CSV)</button></div>
   <div class=tw><table class=lmt><tr><th>Tanggal</th><th>Mahasiswa</th><th>Tagihan</th><th class=hm>Metode</th><th class=n>Nominal</th><th>Bukti</th><th></th></tr>${L.map(({ p, t, m }) => `<tr ${m ? lGo(m.id) : ''}><td style="white-space:nowrap">${lTgl(p.tanggal)}</td><td>${m ? `<b>${esc(m.nama)}</b><small>${esc(m.npm || '-')}</small>` : `<b>${esc(t.nama || '-')}</b><small>${esc(t.npm || '')} · arsip/tanpa akun</small>`}</td><td>${esc(t.jenis || '-')}<small>${t.jenis && lBlnT(t) ? 'Bulan ' + esc(mLabel(lBlnT(t))) : esc(t.periode_label || '')}${(p.ke || 1) > 1 ? ' · pembayaran ke-' + p.ke : ''}</small></td><td class=hm>${esc(p.metode || '-')}${p.dari_keuangan ? '<small>dicatat manual</small>' : ''}</td><td class=n>${Rp(p.nominal)}</td><td style="white-space:nowrap">${lAksiBukti(p, t, 1)}</td>${m ? lChev() : '<td></td>'}</tr>`).join('') || '<tr><td colspan=7>Belum ada uang masuk pada rentang ini.</td></tr>'}${L.length ? `<tr class=trt><td colspan=4>Total</td><td class=n>${Rp(tot)}</td><td></td><td></td></tr>` : ''}</table></div>`;
 }
+
+/* ---------- Bukti bayar yang diunggah mahasiswa ---------- */
+const BBS = { menunggu: ['Menunggu verifikasi', 's-Menunggu-verifikasi'], valid: ['Diterima', 's-Selesai'], ditolak: ['Ditolak', 's-Ditolak'], dibatalkan: ['Dibatalkan', ''] };
+function lBukti() {
+  const d = LM.d, L = [];
+  // Cicilan / pembayaran yang dikirim mahasiswa (bukan dicatat petugas)
+  d.pembayaran.forEach(p => {
+    if (!p.ada_bukti || p.tercatat_admin || !/^\d+$/.test(p.id)) return;
+    const t = d.tById.get(p.tagihan_id) || {};
+    L.push({ k: 'p' + p.id, url: '/api/lms/bukti/pembayaran/' + p.id, tgl: p.dikirim || p.tanggal, st: BBS[p.status] ? p.status : 'menunggu', nom: p.nominal, t, uid: p.user_id, ket: (p.ke || 1) > 1 || t.skema && /cicil|angsur/i.test(t.skema) ? 'Cicilan ke-' + (p.ke || 1) : 'Pembayaran', cm: p.catatan_mahasiswa, ca: p.status == 'ditolak' ? p.catatan : '', nama: p.bukti_nama, lms: '/kelola-cicilan?tab=verifikasi' });
+  });
+  // Bukti pelunasan yang diunggah pada tagihan
+  d.tagihan.forEach(t => {
+    if (!t.ada_bukti) return;
+    const st = t.sisa <= 0 ? 'valid' : t.status == 'menunggu_verifikasi' ? 'menunggu' : 'ditolak';
+    L.push({ k: 't' + t.id, url: '/api/lms/bukti/tagihan/' + t.id, tgl: t.bukti_dikirim || t.diverifikasi || t.dibuat, st, nom: st == 'menunggu' ? t.sisa : t.nominal, t, uid: t.user_id, ket: 'Pelunasan', cm: t.catatan_mahasiswa, ca: st == 'ditolak' ? t.catatan_admin : '', nama: t.bukti_nama, lms: '/kelola-tagihan?status=menunggu_verifikasi' });
+  });
+  return L.sort((a, b) => (b.st == 'menunggu') - (a.st == 'menunggu') || String(b.tgl || '').localeCompare(String(a.tgl || '')));
+}
+function lTabBukti() {
+  const all = lBukti(), c = k => all.filter(x => !k || x.st == k).length;
+  const pill = (k, t) => `<button class="${LM.bs == k ? 'on' : ''}" onclick="LM.bs='${k}';lRefBukti();this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b==this))">${t} <span>${c(k)}</span></button>`;
+  return `<style>.bbp{display:flex;gap:6px;flex-wrap:wrap}.bbp button{border:1px solid var(--ln,#e5e7eb);background:#fff;border-radius:999px;padding:7px 13px;font:inherit;font-size:13px;cursor:pointer;color:inherit}.bbp button span{background:#eef2f7;border-radius:999px;padding:0 7px;margin-left:3px;font-size:12px}.bbp button.on{background:var(--pri,#1e3a8a);color:#fff;border-color:transparent}.bbp button.on span{background:rgba(255,255,255,.25)}
+  .bbg{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-top:14px}.bbc{border:1px solid var(--ln,#e5e7eb);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px;background:#fff}.bbc.mn{border-color:#f5c26b;background:#fffbf2}
+  .bbc .bt{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.bbc .bt b{display:block;font-size:14.5px}.bbc .bt small{color:var(--mu,#6b7280);font-size:12px}.bbc .nm{font-size:17px;font-weight:700}.bbc .mt{font-size:12.5px;color:var(--mu,#6b7280);line-height:1.5}.bbc .q{font-size:12.5px;background:#f6f7f9;border-radius:8px;padding:7px 9px}.bbc .q.r{background:#fef2f2;color:#991b1b}.bbc .ac{display:flex;gap:8px;margin-top:auto;padding-top:4px}.bbc .ac .btn{flex:1;text-decoration:none;justify-content:center;padding:8px 10px;font-size:13px}
+  .tbn{display:inline-block;background:#f59e0b;color:#fff;border-radius:999px;font-size:11px;padding:0 6px;margin-left:4px;line-height:17px}</style>
+  <div class=box><div class=lh style="margin:0 0 4px;align-items:center;flex-wrap:wrap;gap:10px"><div><b>Bukti bayar dari mahasiswa</b><small class=mu style="display:block">Semua bukti transfer yang diunggah mahasiswa di LMS. Verifikasi (terima / tolak) tetap dilakukan di LMS.</small></div>
+  <input style="max-width:260px" value="${esc(LM.bq)}" placeholder="Cari nama / NPM / tagihan" oninput="LM.bq=this.value;clearTimeout(window._lt);window._lt=setTimeout(lRefBukti,200)"></div>
+  <div class=bbp style="margin-top:12px">${pill('menunggu', 'Menunggu verifikasi')}${pill('valid', 'Diterima')}${pill('ditolak', 'Ditolak')}${pill('', 'Semua')}</div>
+  <div id=lmsB>${lRowsBukti()}</div></div>`;
+}
+function lRefBukti() { const e = $('lmsB'); if (e) e.innerHTML = lRowsBukti(); }
+function lRowsBukti() {
+  const d = LM.d, q = LM.bq.trim().toLowerCase();
+  const L = lBukti().filter(x => (!LM.bs || x.st == LM.bs)).map(x => ({ ...x, m: d.mById.get(x.uid) }))
+    .filter(x => !q || ((x.m ? x.m.nama + ' ' + x.m.npm : (x.t.nama || '') + ' ' + (x.t.npm || '')) + ' ' + (x.t.jenis || '')).toLowerCase().includes(q));
+  window._lmsBukti = L;
+  if (!L.length) return `<div class=empty style="margin-top:14px">${IC.audit}<b>${LM.bs == 'menunggu' ? 'Tidak ada bukti yang menunggu verifikasi' : 'Belum ada bukti bayar'}</b></div>`;
+  return `<div class=bbg>${L.map((x, i) => { const nm = x.m ? x.m.nama : x.t.nama || '-', npm = x.m ? x.m.npm : x.t.npm;
+    return `<div class="bbc${x.st == 'menunggu' ? ' mn' : ''}"><div class=bt><div><b>${esc(nm)}</b><small>${esc(npm || 'NPM -')}${x.m ? '' : ' · tanpa akun'}</small></div><span class="bd ${BBS[x.st][1]}">${BBS[x.st][0]}</span></div>
+    <div class=nm>${Rp(x.nom)}</div>
+    <div class=mt>${esc(x.t.jenis || '-')}${lBlnT(x.t) ? ' · Bulan ' + esc(mLabel(lBlnT(x.t))) : x.t.periode_label ? ' · ' + esc(x.t.periode_label) : ''}<br>${esc(x.ket)} · dikirim ${x.tgl ? lTgl(x.tgl) : '-'}</div>
+    ${x.cm ? `<div class=q>Catatan mahasiswa: ${esc(x.cm)}</div>` : ''}${x.ca ? `<div class="q r">Alasan ditolak: ${esc(x.ca)}</div>` : ''}
+    <div class=ac><a class="btn lbk" href="${x.url}" onclick="event.preventDefault();lBuktiBuka(${i})">${NI.eye}Lihat bukti</a>${x.st == 'menunggu' && d.lms_url ? `<a class="btn o" href="${esc(d.lms_url + x.lms)}" target=_blank rel=noopener>Verifikasi di LMS</a>` : x.m ? `<button class="btn o" onclick="go('mhsd',${x.m.id})">Detail</button>` : ''}</div></div>`; }).join('')}</div>`;
+}
+function lBuktiBuka(i) { const x = (window._lmsBukti || [])[i]; if (x) lLihatBukti(x.url, 'Bukti bayar · ' + (x.m ? x.m.nama : x.t.nama || '') + ' · ' + (x.t.jenis || '') + ' · ' + Rp(x.nom), window._lmsBukti.map(y => [y.url, 'Bukti bayar · ' + (y.m ? y.m.nama : y.t.nama || '') + ' · ' + (y.t.jenis || '') + ' · ' + Rp(y.nom)]), i); }
 
 /* ---------- Detail mahasiswa ---------- */
 function mhsdv() {
@@ -445,24 +491,33 @@ function lAksiBukti(p, t, kecil) {
   if (lBolehUnggah(p)) return `<button class="btn o lbk" ${sb} onclick="event.stopPropagation();lUnggah('${esc(p.id)}')" title="Belum ada bukti bayar. Unggah foto / PDF bukti.">${kecil ? '+ Bukti' : 'Unggah bukti'}</button>`;
   return `<small class=mu style="white-space:nowrap">Tidak ada bukti</small>`;
 }
-async function lLihatBukti(url, judul) {
+async function lLihatBukti(url, judul, list, idx) {
+  const L = list && list.length ? list : [[url, judul]]; let j = list ? idx || 0 : 0, obj = '', ctl = null;
   const ov = document.createElement('div'); ov.className = 'lbv';
-  ov.innerHTML = `<style>.lbv{position:fixed;inset:0;z-index:9999;background:rgba(10,15,30,.86);display:flex;flex-direction:column}.lbv .lbh{display:flex;align-items:center;gap:10px;padding:12px 16px;color:#fff}.lbv .lbh b{flex:1;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lbv .lbh .btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.7);padding:7px 12px}.lbv .lbc{flex:1;display:flex;align-items:center;justify-content:center;padding:0 16px 16px;min-height:0}.lbv img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;background:#fff}.lbv iframe{width:min(1000px,100%);height:100%;border:0;border-radius:8px;background:#fff}.lbv .lbm{color:#fff;text-align:center;opacity:.9}</style>
-  <div class=lbh><b>${esc(judul)}</b><a class=btn target=_blank rel=noopener>Buka di tab baru</a><button class=btn>Tutup</button></div><div class=lbc><div class=lbm>Memuat bukti bayar…</div></div>`;
-  let obj = '';
-  const tutup = () => { ov.remove(); document.removeEventListener('keydown', esc_); if (obj) setTimeout(() => URL.revokeObjectURL(obj), 1000); };
-  const esc_ = e => { if (e.key === 'Escape') tutup(); };
-  ov.querySelector('button').onclick = tutup; ov.onclick = e => { if (e.target === ov || e.target.classList.contains('lbc')) tutup(); };
-  document.addEventListener('keydown', esc_); document.body.appendChild(ov);
-  const c = ov.querySelector('.lbc'), a = ov.querySelector('a');
-  try {
-    const r = await fetch(url, { credentials: 'same-origin' });
-    if (!r.ok) throw new Error((await r.text()).slice(0, 200) || 'Bukti bayar tidak dapat dimuat.');
-    const bl = await r.blob(); obj = URL.createObjectURL(bl); a.href = obj;
-    c.innerHTML = /^image\//.test(bl.type) ? `<img alt="Bukti bayar">` : /pdf/.test(bl.type) ? `<iframe title="Bukti bayar"></iframe>` : `<div class=lbm>Berkas tidak dapat ditampilkan. Gunakan "Buka di tab baru".</div>`;
-    const el = c.querySelector('img,iframe'); if (el) el.src = obj;
-  } catch (x) { c.innerHTML = `<div class=lbm>${esc(x.message)}</div>`; a.style.display = 'none'; }
+  ov.innerHTML = `<style>.lbv{position:fixed;inset:0;z-index:9999;background:rgba(10,15,30,.88);display:flex;flex-direction:column}.lbv .lbh{display:flex;align-items:center;gap:10px;padding:12px 16px;color:#fff}.lbv .lbh b{flex:1;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lbv .lbh small{opacity:.75;white-space:nowrap}.lbv .btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.7);padding:7px 12px;text-decoration:none}.lbv .lbc{flex:1;display:flex;align-items:center;justify-content:center;padding:0 16px 16px;min-height:0;position:relative}.lbv img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;background:#fff}.lbv iframe{width:min(1000px,100%);height:100%;border:0;border-radius:8px;background:#fff}.lbv .lbm{color:#fff;text-align:center;opacity:.9}.lbv .nv{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;font-size:22px;padding:0;background:rgba(0,0,0,.35)}.lbv .nv.p{left:18px}.lbv .nv.n{right:18px}@media(max-width:600px){.lbv .lbh{flex-wrap:wrap}.lbv .lbh b{flex-basis:100%}}</style>
+  <div class=lbh><b></b><small></small><a class=btn target=_blank rel=noopener>Buka di tab baru</a><button class="btn x">Tutup</button></div><div class=lbc></div>`;
+  const c = ov.querySelector('.lbc'), a = ov.querySelector('a'), hb = ov.querySelector('.lbh b'), hs = ov.querySelector('.lbh small');
+  const tutup = () => { ov.remove(); document.removeEventListener('keydown', kb); if (ctl) ctl.abort(); if (obj) URL.revokeObjectURL(obj); };
+  const geser = n => { if (L.length > 1) { j = (j + n + L.length) % L.length; muat(); } };
+  const kb = e => { if (e.key === 'Escape') tutup(); if (e.key === 'ArrowRight') geser(1); if (e.key === 'ArrowLeft') geser(-1); };
+  async function muat() {
+    const [u, t] = L[j]; hb.textContent = t; hs.textContent = L.length > 1 ? `${j + 1} dari ${L.length}` : '';
+    if (ctl) ctl.abort(); ctl = new AbortController(); if (obj) { URL.revokeObjectURL(obj); obj = ''; }
+    a.style.display = 'none'; c.innerHTML = '<div class=lbm>Memuat bukti bayar…</div>';
+    try {
+      const r = await fetch(u, { credentials: 'same-origin', signal: ctl.signal });
+      if (!r.ok) throw new Error((await r.text()).slice(0, 200) || 'Bukti bayar tidak dapat dimuat.');
+      const bl = await r.blob(); obj = URL.createObjectURL(bl); a.href = obj; a.style.display = '';
+      c.innerHTML = /^image\//.test(bl.type) ? `<img alt="Bukti bayar">` : /pdf/.test(bl.type) ? `<iframe title="Bukti bayar"></iframe>` : `<div class=lbm>Berkas tidak dapat ditampilkan di sini. Gunakan "Buka di tab baru".</div>`;
+      const el = c.querySelector('img,iframe'); if (el) el.src = obj;
+    } catch (x) { if (x.name !== 'AbortError') c.innerHTML = `<div class=lbm>${esc(x.message)}</div>`; return; }
+    if (L.length > 1) c.insertAdjacentHTML('beforeend', `<button class="btn nv p" title="Sebelumnya">‹</button><button class="btn nv n" title="Berikutnya">›</button>`);
+    c.querySelectorAll('.nv').forEach(b => b.onclick = e => { e.stopPropagation(); geser(b.classList.contains('p') ? -1 : 1); });
+  }
+  ov.querySelector('.x').onclick = tutup; ov.onclick = e => { if (e.target === ov || e.target === c) tutup(); };
+  document.addEventListener('keydown', kb); document.body.appendChild(ov); muat();
 }
+
 function lUnggah(id) {
   const i = Object.assign(document.createElement('input'), { type: 'file', accept: '.jpg,.jpeg,.png,.pdf' });
   i.onchange = async () => {

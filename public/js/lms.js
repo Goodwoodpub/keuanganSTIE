@@ -22,7 +22,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .lmt td.go{width:22px;padding-left:0;padding-right:4px;color:var(--mu)}.lmt td.go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
 .lmt.yr th,.lmt.yr td{padding:7px 3px}.lmt.yr td.nm{padding-left:8px;min-width:150px}
 .lmf{border:1px solid var(--bd);border-radius:12px;padding:16px;margin-top:14px;background:#fbfcfe}
-@media(max-width:700px){.lmt .hm{display:none}}
+a.lbk,button.lbk{display:inline-flex;align-items:center;gap:5px;text-decoration:none}.lbk svg{width:14px;height:14px;flex:none}@media(max-width:700px){.lmt .hm{display:none}}
 </style>`);
 const LM = { d: null, err: null, setup: false, loading: false, tab: 'ring', q: '', st: '', ang: '', pr: '', per: '', dari: '', sampai: '', uq: '', hv: 'hari', hm: '', jj: '', sa: '' };
 IC.mhs = '<svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5M22 9v6"/></svg>';
@@ -218,7 +218,7 @@ function lRowsMasuk() {
   return `<div class=kpis style="margin-top:16px">${[['Total uang masuk', Rp(tot), all ? 'semua tanggal' : `${fmtD(LM.dari)} – ${fmtD(LM.sampai)}`, 'new'], ['Jumlah transaksi', L.length, `${new Set(L.map(x => x.p.user_id)).size} pembayar`, 'list'], ['Rata-rata per transaksi', Rp(L.length ? Math.round(tot / L.length) : 0), 'pembayaran tervalidasi', 'rep']].map(([a, b, c, k]) => `<div class=kpi><div class=kh><span>${a}</span><i class=ci>${IC[k]}</i></div><b>${b}</b><small>${c}</small></div>`).join('')}</div>
   ${Object.keys(mt).length ? `<div class=mu style="margin:4px 0 10px;font-size:13px">Per metode: ${Object.entries(mt).sort((a, b) => b[1] - a[1]).map(([k, a]) => `<b>${esc(k)}</b> ${Rp(a)}`).join(' · ')}</div>` : ''}
   <div class=lh style="margin:6px 0 8px;justify-content:flex-end"><button class="btn o" onclick="lCsvMasuk()" ${L.length ? '' : 'disabled'}>Ekspor Excel (CSV)</button></div>
-  <div class=tw><table class=lmt><tr><th>Tanggal</th><th>Mahasiswa</th><th>Tagihan</th><th class=hm>Metode</th><th class=n>Nominal</th><th></th></tr>${L.map(({ p, t, m }) => `<tr ${m ? lGo(m.id) : ''}><td style="white-space:nowrap">${lTgl(p.tanggal)}</td><td>${m ? `<b>${esc(m.nama)}</b><small>${esc(m.npm || '-')}</small>` : `<b>${esc(t.nama || '-')}</b><small>${esc(t.npm || '')} · arsip/tanpa akun</small>`}</td><td>${esc(t.jenis || '-')}<small>${t.jenis && lBlnT(t) ? 'Bulan ' + esc(mLabel(lBlnT(t))) : esc(t.periode_label || '')}${(p.ke || 1) > 1 ? ' · pembayaran ke-' + p.ke : ''}</small></td><td class=hm>${esc(p.metode || '-')}${p.dari_keuangan ? '<small>dicatat manual</small>' : ''}</td><td class=n>${Rp(p.nominal)}</td>${m ? lChev() : '<td></td>'}</tr>`).join('') || '<tr><td colspan=6>Belum ada uang masuk pada rentang ini.</td></tr>'}${L.length ? `<tr class=trt><td colspan=4>Total</td><td class=n>${Rp(tot)}</td><td></td></tr>` : ''}</table></div>`;
+  <div class=tw><table class=lmt><tr><th>Tanggal</th><th>Mahasiswa</th><th>Tagihan</th><th class=hm>Metode</th><th class=n>Nominal</th><th>Bukti</th><th></th></tr>${L.map(({ p, t, m }) => `<tr ${m ? lGo(m.id) : ''}><td style="white-space:nowrap">${lTgl(p.tanggal)}</td><td>${m ? `<b>${esc(m.nama)}</b><small>${esc(m.npm || '-')}</small>` : `<b>${esc(t.nama || '-')}</b><small>${esc(t.npm || '')} · arsip/tanpa akun</small>`}</td><td>${esc(t.jenis || '-')}<small>${t.jenis && lBlnT(t) ? 'Bulan ' + esc(mLabel(lBlnT(t))) : esc(t.periode_label || '')}${(p.ke || 1) > 1 ? ' · pembayaran ke-' + p.ke : ''}</small></td><td class=hm>${esc(p.metode || '-')}${p.dari_keuangan ? '<small>dicatat manual</small>' : ''}</td><td class=n>${Rp(p.nominal)}</td><td style="white-space:nowrap">${lAksiBukti(p, t, 1)}</td>${m ? lChev() : '<td></td>'}</tr>`).join('') || '<tr><td colspan=7>Belum ada uang masuk pada rentang ini.</td></tr>'}${L.length ? `<tr class=trt><td colspan=4>Total</td><td class=n>${Rp(tot)}</td><td></td><td></td></tr>` : ''}</table></div>`;
 }
 
 /* ---------- Detail mahasiswa ---------- */
@@ -240,7 +240,7 @@ function mhsdv() {
   ${sAll.tunggu ? `<div class="aps warn" style="margin:12px 0">Ada pembayaran yang menunggu verifikasi di LMS.</div>` : ''}</div>
   ${lPerBulanMhs(m)}
   <div class=box><div class=rzh><div><h3>Tagihan</h3><small>Status setiap tagihan sesuai data terakhir di LMS.</small></div></div>
-  ${T.length ? T.map(t => `<div class=txc style="margin-top:12px"><div class=txb style="width:100%"><div class=txt><div><b>${esc(t.jenis)}</b>${t.keterangan ? `<div class=mu>${esc(t.keterangan)}</div>` : ''}<div class=meta><span>${NI.rc}${esc(t.nomor_invoice)}</span>${lBlnT(t) ? `<span>${NI.cal}Bulan ${esc(mLabel(lBlnT(t)))}</span>` : ''}${t.periode_label ? `<span>${NI.cal}${esc(t.periode_label)}</span>` : ''}<span>${NI.tag}${esc(t.skema)}</span><span>${NI.cal}Jatuh tempo ${fmtD(t.jatuh_tempo_berikutnya || t.deadline)}</span>${t.kwitansi ? `<span>${NI.pdf}Kwitansi ${esc(t.kwitansi)}</span>` : ''}${t.ada_bukti ? `<span><a href="/api/lms/bukti/tagihan/${t.id}" target=_blank rel=noopener>${NI.eye}Bukti dari mahasiswa</a></span>` : ''}</div></div><div style="text-align:right"><div class=amt>${Rp(t.nominal)}</div>${tBadge(t)}</div></div>
+  ${T.length ? T.map(t => `<div class=txc style="margin-top:12px"><div class=txb style="width:100%"><div class=txt><div><b>${esc(t.jenis)}</b>${t.keterangan ? `<div class=mu>${esc(t.keterangan)}</div>` : ''}<div class=meta><span>${NI.rc}${esc(t.nomor_invoice)}</span>${lBlnT(t) ? `<span>${NI.cal}Bulan ${esc(mLabel(lBlnT(t)))}</span>` : ''}${t.periode_label ? `<span>${NI.cal}${esc(t.periode_label)}</span>` : ''}<span>${NI.tag}${esc(t.skema)}</span><span>${NI.cal}Jatuh tempo ${fmtD(t.jatuh_tempo_berikutnya || t.deadline)}</span>${t.kwitansi ? `<span>${NI.pdf}Kwitansi ${esc(t.kwitansi)}</span>` : ''}${t.ada_bukti ? `<span><a href="/api/lms/bukti/tagihan/${t.id}" onclick="event.preventDefault();lLihatBukti(this.getAttribute('href'),${esc(JSON.stringify('Bukti dari mahasiswa · ' + t.jenis))})">${NI.eye}Bukti dari mahasiswa</a></span>` : ''}</div></div><div style="text-align:right"><div class=amt>${Rp(t.nominal)}</div>${tBadge(t)}</div></div>
     <div class=prog style="margin-top:12px"><i style="width:${t.persen}%"></i></div><small class=pl>Dibayar ${Rp(t.dibayar)} (${t.persen}%) · sisa ${Rp(t.sisa)}${t.potongan ? ` · potongan ${Rp(t.potongan)}` : ''}</small>
     ${t.angsuran && t.angsuran.length ? `<div class=tw style="margin-top:10px"><table class=lmt><tr><th>Angsuran</th><th>Untuk bulan</th><th>Jatuh tempo</th><th>Nominal</th><th>Status</th></tr>${t.angsuran.map(a => `<tr><td>Ke-${a.ke}</td><td>${esc(mLabel(lBlnA(a)))}</td><td>${fmtD(a.jatuh_tempo)}</td><td>${Rp(a.nominal)}</td><td><span class="bd ${(aSt[a.status] || ['', ''])[1]}">${(aSt[a.status] || [a.status])[0]}</span></td></tr>`).join('')}</table></div>` : ''}</div></div>`).join('') : `<div class=empty style="margin-top:12px">${IC.list}<b>Belum ada tagihan untuk mahasiswa ini</b></div>`}</div>
   <div class=box><div class=bh><h4>Riwayat pembayaran</h4>${LM.form ? '' : `<button class=btn onclick="LM.form=true;draw();setTimeout(()=>{const f=$('lmf');if(f)f.scrollIntoView({behavior:'smooth',block:'center'})},50)">+ Catat Pembayaran Manual</button>`}</div>
@@ -435,12 +435,33 @@ function lBacaBukti(f) {
   if (!/^image\//.test(f.type) || f.size < 1.5e6) return kirim(f);
   return new Promise(ok => { const i = new Image(); i.onload = () => { const k = Math.min(1, 2000 / Math.max(i.width, i.height)), c = document.createElement('canvas'); c.width = Math.round(i.width * k); c.height = Math.round(i.height * k); c.getContext('2d').drawImage(i, 0, 0, c.width, c.height); URL.revokeObjectURL(i.src); c.toBlob(b => ok(kirim(b || f)), 'image/jpeg', .85); }; i.onerror = () => ok(kirim(f)); i.src = URL.createObjectURL(f); });
 }
-function lAksiBukti(p, t) {
-  const sb = 'style="padding:6px 10px;font-size:12.5px"';
-  if (p.ada_bukti && /^\d+$/.test(p.id)) return `<a class="btn o" ${sb} href="/api/lms/bukti/pembayaran/${p.id}" target=_blank rel=noopener>Lihat bukti</a>${p.dari_keuangan && p.status == 'valid' ? ` <button class="btn o" ${sb} onclick="lUnggah('${esc(p.id)}')" title="Ganti bukti">Ganti</button>` : ''}`;
-  if (t.ada_bukti) return `<a class="btn o" ${sb} href="/api/lms/bukti/tagihan/${t.id}" target=_blank rel=noopener>Lihat bukti</a>`;
-  if (p.dari_keuangan && p.status == 'valid') return `<button class="btn o" ${sb} onclick="lUnggah('${esc(p.id)}')">Unggah bukti</button>`;
-  return '';
+/* Bukti bayar: bisa dilihat langsung (foto / PDF) tanpa harus mengunduh. */
+const lBuktiUrl = (p, t) => p.ada_bukti && /^\d+$/.test(p.id) ? '/api/lms/bukti/pembayaran/' + p.id : t && t.ada_bukti ? '/api/lms/bukti/tagihan/' + t.id : '';
+const lBolehUnggah = p => /^\d+$/.test(p.id) && p.status == 'valid' && (p.dari_keuangan || p.tercatat_admin);
+function lAksiBukti(p, t, kecil) {
+  const sb = 'style="padding:6px 10px;font-size:12.5px"', u = lBuktiUrl(p, t);
+  const jdl = esc(JSON.stringify('Bukti bayar · ' + (t && t.jenis || 'Pembayaran') + ' · ' + Rp(p.nominal)));
+  if (u) return `<a class="btn o lbk" ${sb} href="${u}" onclick="event.preventDefault();event.stopPropagation();lLihatBukti(this.getAttribute('href'),${jdl})">${NI.eye}${kecil ? 'Lihat' : 'Lihat bukti'}</a>${p.ada_bukti && lBolehUnggah(p) && !kecil ? ` <button class="btn o" ${sb} onclick="event.stopPropagation();lUnggah('${esc(p.id)}')" title="Ganti bukti">Ganti</button>` : ''}`;
+  if (lBolehUnggah(p)) return `<button class="btn o lbk" ${sb} onclick="event.stopPropagation();lUnggah('${esc(p.id)}')" title="Belum ada bukti bayar. Unggah foto / PDF bukti.">${kecil ? '+ Bukti' : 'Unggah bukti'}</button>`;
+  return `<small class=mu style="white-space:nowrap">Tidak ada bukti</small>`;
+}
+async function lLihatBukti(url, judul) {
+  const ov = document.createElement('div'); ov.className = 'lbv';
+  ov.innerHTML = `<style>.lbv{position:fixed;inset:0;z-index:9999;background:rgba(10,15,30,.86);display:flex;flex-direction:column}.lbv .lbh{display:flex;align-items:center;gap:10px;padding:12px 16px;color:#fff}.lbv .lbh b{flex:1;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lbv .lbh .btn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.7);padding:7px 12px}.lbv .lbc{flex:1;display:flex;align-items:center;justify-content:center;padding:0 16px 16px;min-height:0}.lbv img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;background:#fff}.lbv iframe{width:min(1000px,100%);height:100%;border:0;border-radius:8px;background:#fff}.lbv .lbm{color:#fff;text-align:center;opacity:.9}</style>
+  <div class=lbh><b>${esc(judul)}</b><a class=btn target=_blank rel=noopener>Buka di tab baru</a><button class=btn>Tutup</button></div><div class=lbc><div class=lbm>Memuat bukti bayar…</div></div>`;
+  let obj = '';
+  const tutup = () => { ov.remove(); document.removeEventListener('keydown', esc_); if (obj) setTimeout(() => URL.revokeObjectURL(obj), 1000); };
+  const esc_ = e => { if (e.key === 'Escape') tutup(); };
+  ov.querySelector('button').onclick = tutup; ov.onclick = e => { if (e.target === ov || e.target.classList.contains('lbc')) tutup(); };
+  document.addEventListener('keydown', esc_); document.body.appendChild(ov);
+  const c = ov.querySelector('.lbc'), a = ov.querySelector('a');
+  try {
+    const r = await fetch(url, { credentials: 'same-origin' });
+    if (!r.ok) throw new Error((await r.text()).slice(0, 200) || 'Bukti bayar tidak dapat dimuat.');
+    const bl = await r.blob(); obj = URL.createObjectURL(bl); a.href = obj;
+    c.innerHTML = /^image\//.test(bl.type) ? `<img alt="Bukti bayar">` : /pdf/.test(bl.type) ? `<iframe title="Bukti bayar"></iframe>` : `<div class=lbm>Berkas tidak dapat ditampilkan. Gunakan "Buka di tab baru".</div>`;
+    const el = c.querySelector('img,iframe'); if (el) el.src = obj;
+  } catch (x) { c.innerHTML = `<div class=lbm>${esc(x.message)}</div>`; a.style.display = 'none'; }
 }
 function lUnggah(id) {
   const i = Object.assign(document.createElement('input'), { type: 'file', accept: '.jpg,.jpeg,.png,.pdf' });

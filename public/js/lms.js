@@ -24,7 +24,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .lmf{border:1px solid var(--bd);border-radius:12px;padding:16px;margin-top:14px;background:#fbfcfe}
 @media(max-width:700px){.lmt .hm{display:none}}
 </style>`);
-const LM = { d: null, err: null, setup: false, loading: false, tab: 'ring', q: '', st: '', ang: '', pr: '', per: '', dari: '', sampai: '', uq: '', jj: '', sa: '' };
+const LM = { d: null, err: null, setup: false, loading: false, tab: 'ring', q: '', st: '', ang: '', pr: '', per: '', dari: '', sampai: '', uq: '', hv: 'hari', hm: '', jj: '', sa: '' };
 IC.mhs = '<svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5M22 9v6"/></svg>';
 SUBT.mhs = 'Data mahasiswa, tagihan, dan uang masuk dari LMS';
 SUBT.mhsd = 'Status tagihan dan riwayat pembayaran mahasiswa';
@@ -150,8 +150,40 @@ function lTabRing() {
   return `<div class=box style="padding:14px 18px"><div class=g2 style="margin:0">${lPerSel()}</div></div>
   <div class=kpis>${K.map(([a, b, c, k]) => `<div class=kpi><div class=kh><span>${a}</span><i class=ci>${IC[k]}</i></div><b>${b}</b><small>${c}</small></div>`).join('')}</div>
   <div class=attn><span class=al>Mahasiswa</span>${['lunas', 'sebagian', 'menunggu', 'belum', 'nunggak', 'kosong'].map(k => `<div class="ai ${cnt(k) && k != 'lunas' && k != 'kosong' ? 'on' : ''}" onclick="LM.tab='mhs';LM.st='${k}';draw()"><b>${cnt(k)}</b><span>${LST[k][0]}</span></div>`).join('')}</div>
+  ${lHarian()}
   <div class=g2b><div class=box><h4>Uang masuk per bulan</h4>${bulan}</div><div class=box><h4>Uang masuk per jenis tagihan</h4>${Object.keys(jn).length ? Object.entries(jn).sort((a, b) => b[1] - a[1]).map(([k, a]) => `<div class=bar2r><div class=bl><span>${esc(k)}</span><b>${Rp(a)}</b></div><div class=trk><i style="width:${Math.max(3, a / mxj * 100)}%"></i></div></div>`).join('') : `<div class=empty>${IC.rep}<b>Belum ada pembayaran</b></div>`}</div></div>
   <div class=box><div class=bh><h4>Mahasiswa menunggak (sisa terbesar)</h4><a class=lnk2 onclick="LM.tab='mhs';LM.st='nunggak';draw()">Lihat semua →</a></div>${tg.length ? `<div class=tw><table class=lmt><tr><th>Mahasiswa</th><th class=n>Sisa tagihan</th><th></th></tr>${tg.map(({ m, s }) => `<tr ${lGo(m.id)}><td>${lMhsCell(m)}</td><td class=n>${Rp(s.sisa)}</td>${lChev()}</tr>`).join('')}</table></div>` : `<div class=empty>${IC.audit}<b>Tidak ada mahasiswa yang menunggak</b></div>`}</div>`;
+}
+
+/* ---------- Uang masuk per hari ---------- */
+const HRI = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+function lHmGeser(n) { const [y, m] = LM.hm.split('-').map(Number); LM.hm = lIso(new Date(y, m - 1 + n, 1)).slice(0, 7); draw(); }
+function lHariBuka(k) { LM.dari = k; LM.sampai = k; LM.uq = ''; LM.tab = 'masuk'; draw(); scrollTo({ top: 0, behavior: 'smooth' }); }
+function lHarian() {
+  const now = new Date(), today = lIso(now), ymNow = today.slice(0, 7);
+  if (!LM.hm) LM.hm = ymNow;
+  const ym = LM.hm, [y, m] = ym.split('-').map(Number), nd = new Date(y, m, 0).getDate();
+  const H = {}; for (let i = 1; i <= nd; i++) H[ym + '-' + String(i).padStart(2, '0')] = { a: 0, n: 0 };
+  lMasuk(ym + '-01', ym + '-' + String(nd).padStart(2, '0')).forEach(p => { const h = H[lDay(p.tanggal)]; if (h) { h.a += p.nominal; h.n++; } });
+  const E = Object.entries(H), tot = E.reduce((a, [, h]) => a + h.a, 0), trx = E.reduce((a, [, h]) => a + h.n, 0);
+  const isi = E.filter(([, h]) => h.n), mx = Math.max(1, ...E.map(([, h]) => h.a));
+  const top = isi.slice().sort((a, b) => b[1].a - a[1].a)[0];
+  const lalu = ym === ymNow ? now.getDate() : ym < ymNow ? nd : 0, rata = lalu ? Math.round(tot / lalu) : 0;
+  const hIni = H[today] || { a: 0, n: 0 };
+  const tg = k => { const d = new Date(k + 'T00:00:00'); return { d: d.getDate(), w: HRI[d.getDay()], we: d.getDay() == 0 || d.getDay() == 6 }; };
+  const kol = E.map(([k, h]) => { const t = tg(k), fut = k > today; return `<div class="hc${k == today ? ' td' : ''}${h.n ? ' on' : ''}${fut ? ' fu' : ''}" ${h.n ? `onclick="lHariBuka('${k}')"` : ''} title="${t.w}, ${fmtD(k)}${h.n ? ` — ${Rp(h.a)} (${h.n} transaksi)` : ' — tidak ada uang masuk'}"><div class=hcb><i style="height:${h.a ? Math.max(4, h.a / mx * 100) : 0}%"></i></div><span class="${t.we ? 'we' : ''}">${t.d}</span></div>`; }).join('');
+  const rows = isi.slice().reverse().map(([k, h]) => { const t = tg(k); return `<tr onclick="lHariBuka('${k}')" style="cursor:pointer"><td><b>${t.w}, ${fmtD(k)}</b>${k == today ? ' <span class=hbt>Hari ini</span>' : ''}<small class=hmo>${h.n} transaksi</small></td><td class=hm>${h.n} transaksi</td><td class=hm><div class=trk style="margin:0;min-width:80px"><i style="width:${Math.max(3, h.a / mx * 100)}%"></i></div></td><td class=n><b>${Rp(h.a)}</b></td>${lChev()}</tr>`; }).join('');
+  return `<style>.hnav{display:flex;align-items:center;gap:6px}.hnav b{min-width:128px;text-align:center;font-size:14px}.hnav .btn{padding:6px 11px}
+  .hsum{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin:12px 0 14px}.hsum div{background:var(--bg,#f6f7f9);border-radius:10px;padding:10px 12px}.hsum small{display:block;color:var(--mu,#6b7280);font-size:12px}.hsum b{font-size:16px}.hsum em{display:block;font-style:normal;font-size:12px;color:var(--mu,#6b7280)}
+  .hch{display:flex;gap:3px;align-items:flex-end;height:150px;padding:6px 2px 0;border-bottom:1px solid var(--ln,#e5e7eb);overflow-x:auto}
+  .hc{flex:1;min-width:14px;display:flex;flex-direction:column;align-items:center;height:100%}.hcb{flex:1;width:100%;display:flex;align-items:flex-end;border-radius:4px 4px 0 0}
+  .hc i{display:block;width:100%;background:var(--pri,#2563eb);opacity:.8;border-radius:4px 4px 0 0;transition:opacity .15s}.hc.on{cursor:pointer}.hc.on:hover i{opacity:1}.hc.on:hover .hcb{background:rgba(37,99,235,.07)}
+  .hc span{font-size:10.5px;color:var(--mu,#6b7280);padding:4px 0 3px}.hc span.we{color:#c2410c}.hc.td span{color:#fff;background:var(--pri,#2563eb);border-radius:5px;padding:2px 4px;margin:2px 0 1px;font-weight:600}.hc.fu{opacity:.4}
+  .hmo{display:none}@media(max-width:700px){.hmo{display:block}.htl{text-align:left}.hch{gap:2px}.hc{min-width:7px}.hc span{font-size:8.5px}.hc.td span{padding:2px 1px}}.hbt{white-space:nowrap;font-size:11px;background:#dbeafe;color:#1d4ed8;border-radius:20px;padding:1px 7px;font-weight:600}</style>
+  <div class=box><div class=bh style="flex-wrap:wrap;gap:8px"><h4 style="margin:0">Uang masuk per hari</h4><div class=hnav><button class="btn o" onclick="lHmGeser(-1)" title="Bulan sebelumnya">‹</button><b>${mLabel(ym)}</b><button class="btn o" onclick="lHmGeser(1)" ${ym >= ymNow ? 'disabled' : ''} title="Bulan berikutnya">›</button>${ym != ymNow ? `<button class="btn o" onclick="LM.hm='';draw()">Bulan ini</button>` : ''}</div></div>
+  <div class=hsum><div><small>Hari ini</small><b>${Rp(hIni.a)}</b><em>${hIni.n} transaksi</em></div><div><small>Total ${mLabel(ym)}</small><b>${Rp(tot)}</b><em>${trx} transaksi · ${isi.length} hari ada pemasukan</em></div><div><small>Rata-rata per hari</small><b>${Rp(rata)}</b><em>${lalu ? `dari ${lalu} hari` : 'bulan belum berjalan'}</em></div><div><small>Hari tertinggi</small><b>${top ? Rp(top[1].a) : '-'}</b><em>${top ? tg(top[0]).w + ', ' + fmtD(top[0]) : 'belum ada'}</em></div></div>
+  <div class=hch>${kol}</div>
+  ${isi.length ? `<div class=tw style="margin-top:14px"><table class=lmt><tr><th>Tanggal</th><th class=hm>Transaksi</th><th class=hm></th><th class=n>Uang masuk</th><th></th></tr>${rows}<tr class=trt><td class=htl>Total ${mLabel(ym)}</td><td class=hm></td><td class=hm></td><td class=n>${Rp(tot)}</td><td></td></tr></table></div><small class=mu style="display:block;margin-top:8px">Klik grafik atau baris tanggal untuk melihat siapa saja yang membayar pada hari itu.</small>` : `<div class=empty style="margin-top:12px">${IC.rep}<b>Belum ada uang masuk di ${mLabel(ym)}</b></div>`}</div>`;
 }
 
 function lTabMhs() {
